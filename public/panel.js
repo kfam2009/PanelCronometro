@@ -61,6 +61,31 @@ function render() {
       return d;
     }));
   }
+  // Video y YouTube
+  const aire = C.alAire && C.medios.find(m => m.id === C.alAire.id);
+  $('#aire').textContent = aire ? 'AL AIRE: ' + aire.nombre : 'RESULTADOS';
+  $('#aire').className = 'pill' + (aire ? ' live' : ' ok');
+  $('#volver').hidden = !aire;
+  if (!focused('#ajuste') && changed('ajuste', C.ajuste)) $('#ajuste').value = C.ajuste;
+  if (changed('sonido', C.sonido)) $('#sonido').checked = C.sonido;
+  if (changed('medios', [C.medios, C.alAire?.id])) {
+    $('#medios').replaceChildren(...(C.medios.length ? C.medios.map(m => {
+      const r = el('div', 'med' + (aire?.id === m.id ? ' on' : ''));
+      const tag = el('span', 'pill', m.tipo === 'youtube' ? 'YOUTUBE' : 'VIDEO');
+      let rep = el('span');
+      if (m.tipo === 'video') {
+        rep = el('label', 'chk'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = Boolean(m.repetir);
+        cb.onchange = () => act('medios', { medios: C.medios.map(x => x.id === m.id ? { ...x, repetir: cb.checked } : x) });
+        rep.title = 'Sin tildar: al terminar vuelve solo a los resultados'; rep.append(cb, document.createTextNode('repetir'));
+      }
+      const go = el('button', 'btn mini ' + (aire?.id === m.id ? '' : 'go'), aire?.id === m.id ? 'DE NUEVO' : 'AL AIRE');
+      go.title = 'Mostrarlo a pantalla completa'; go.onclick = () => act('aire', { id: m.id }, 'Al aire: ' + m.nombre);
+      const x = el('button', 'btn del mini', '×'); x.title = 'Borrar';
+      x.onclick = () => { if (confirm(`¿Borrar "${m.nombre}"?`)) act('medios', { medios: C.medios.filter(y => y.id !== m.id) }, 'Borrado'); };
+      r.append(tag, el('span', 'n', m.nombre), rep, go, x);
+      return r;
+    }) : [el('p', 'muted', 'Subí un video o pegá un link de YouTube. AL AIRE lo muestra a pantalla completa; mientras tanto las llegadas esperan y salen después.')]));
+  }
   // Llegadas
   if (changed('list', st.recientes.map(a => [a.pid, a.t]))) {
     $('#list').replaceChildren(...(st.recientes.length ? st.recientes.map(a => {
@@ -147,6 +172,28 @@ $('#file').onchange = async () => {
     await act('logos/subir', { nombre: f.name.replace(/\.[^.]+$/, ''), data }, 'Imagen agregada');
   }
   $('#file').value = '';
+};
+$('#volver').onclick = () => act('aire', { id: '' }, 'Volviendo a los resultados');
+$('#ajuste').onchange = () => act('config', { ajuste: $('#ajuste').value });
+$('#sonido').onchange = () => act('config', { sonido: $('#sonido').checked });
+$('#addYt').onclick = async () => { const n = st.config.medios.length; await act('medios/youtube', { url: $('#yt').value }, 'YouTube agregado'); if (st.config.medios.length > n) $('#yt').value = ''; };
+$('#yt').onkeydown = e => { if (e.key === 'Enter') $('#addYt').click(); };
+// El video se manda tal cual (puede pesar mucho), mostrando el avance
+$('#vfile').onchange = () => {
+  const f = $('#vfile').files[0]; $('#vfile').value = '';
+  if (!f) return;
+  const ext = (f.name.split('.').pop() || '').toLowerCase(), info = $('#subiendo');
+  const x = new XMLHttpRequest();
+  x.open('POST', `/api/medios/subir?ext=${encodeURIComponent(ext)}&nombre=${encodeURIComponent(f.name.replace(/\.[^.]+$/, ''))}`);
+  x.upload.onprogress = e => { if (e.lengthComputable) info.textContent = `Subiendo ${f.name}: ${Math.round(e.loaded / e.total * 100)}%`; };
+  x.onload = () => {
+    info.hidden = true;
+    let j = {}; try { j = JSON.parse(x.responseText); } catch {}
+    if (x.status === 200) { st = j; render(); toast('Video agregado'); } else toast(j.error || 'No se pudo subir el video');
+  };
+  x.onerror = () => { info.hidden = true; toast('Se cortó la subida del video'); };
+  info.textContent = `Subiendo ${f.name}...`; info.hidden = false;
+  x.send(f);
 };
 $('#sim').onclick = () => act('simular', { bib: $('#bib').value.trim() }, 'Llegada simulada: dorsal ' + $('#bib').value.trim());
 $('#bib').onkeydown = e => { if (e.key === 'Enter') $('#sim').click(); };

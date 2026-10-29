@@ -10,8 +10,9 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI",Inte
 /* Todo en una pantalla: grilla que ocupa el alto disponible, las listas se desplazan por dentro */
 main{flex:1;min-height:0;display:grid;gap:10px;padding:10px;
   grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
-  grid-template-rows:auto auto minmax(0,1fr);
-  grid-template-areas:"crono lleg" "pant lleg" "cams logos"}
+  grid-template-rows:auto auto minmax(0,1fr) minmax(0,1fr);
+  grid-template-areas:"crono lleg" "pant lleg" "cams medios" "logos medios"}
+.a-medios{grid-area:medios}
 .a-crono{grid-area:crono}.a-pant{grid-area:pant}.a-cams{grid-area:cams}.a-lleg{grid-area:lleg}.a-logos{grid-area:logos}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:0;display:flex;flex-direction:column;gap:8px}
 .head{display:flex;align-items:center;justify-content:space-between;gap:10px}
@@ -62,4 +63,8 @@ input[type=color]{padding:2px;height:33px;width:56px}
   .cam{grid-template-columns:1fr auto auto}.cam>input:nth-child(3),.cam>select{grid-column:1/-1}
   .it{grid-template-columns:40px minmax(0,1fr) 72px}.it .m{display:none}
 }
+.med{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;gap:6px;align-items:center;padding:5px 8px;background:#11141b;border:1px solid var(--line);border-radius:6px}
+.med.on{border-color:var(--go2);background:#10261b}
+.med .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}
+.pill.live{background:#e3192c;color:#fff}
 .chk{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer}.chk input{width:auto}

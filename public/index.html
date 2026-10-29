@@ -23,7 +23,7 @@
 
   <section class="card a-pant">
     <div class="head"><h2>Pantalla</h2><button id="open" class="btn go" title="La abre a pantalla completa en el segundo monitor (el HDMI de la LED). Para cerrarla: Alt+F4">ABRIR EN LA PANTALLA</button></div>
-    <div class="prev"><iframe id="preview" src="pantalla.html" title="Vista de la pantalla" tabindex="-1"></iframe></div>
+    <div class="prev"><iframe id="preview" src="pantalla.html?preview=1" allow="autoplay; encrypted-media" title="Vista de la pantalla" tabindex="-1"></iframe></div>
     <div class="opts">
       <label class="grow">Salida HDMI<select id="area"></select></label>
       <label>Página (seg)<input id="seg" type="number" min="3" max="30"></label>
@@ -49,6 +49,14 @@
     <div class="head"><h2>Llegadas</h2><span class="muted">últimas 15</span></div>
     <div id="list" class="list scroll"></div>
     <div class="row tests"><input id="bib" class="bib" placeholder="Dorsal" inputmode="numeric" autocomplete="off"><button id="sim" class="btn go">SIMULAR</button><button id="scan" class="btn" title="Trae los resultados que ya existan">CARGAR TODOS</button><button id="clear" class="btn del" title="Para empezar un evento nuevo">BORRAR</button></div>
+  </section>
+
+  <section class="card a-medios">
+    <div class="head"><h2>Video y YouTube</h2><span id="aire" class="pill">RESULTADOS</span><button id="volver" class="btn del" hidden>VOLVER A RESULTADOS</button></div>
+    <div class="row"><input id="yt" autocomplete="off" placeholder="Link de YouTube (video o en vivo)"><button id="addYt" class="btn">+ YOUTUBE</button><label class="btn upload">+ VIDEO<input id="vfile" type="file" accept="video/*,.mkv,.mov" hidden></label></div>
+    <p id="subiendo" class="muted" hidden></p>
+    <div id="medios" class="list scroll"></div>
+    <div class="opts"><label>Ajuste<select id="ajuste"><option value="llenar">Llenar la pantalla (recorta)</option><option value="entero">Entero (con bordes)</option></select></label><label class="chk"><input id="sonido" type="checkbox">con sonido</label></div>
   </section>
 
   <section class="card a-logos">

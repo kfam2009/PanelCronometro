@@ -12,12 +12,13 @@ import { fileURLToPath } from 'node:url';
 import { Carrera } from './lib/carrera.mjs';
 import { Go2rtc } from './lib/camaras.mjs';
 
-export const VERSION = '1.2.4';
+export const VERSION = '1.3.0';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 5100);
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
 const logosDir = path.join(dataDir, 'logos');
-fss.mkdirSync(logosDir, { recursive: true });
+const videosDir = path.join(dataDir, 'videos');
+fss.mkdirSync(logosDir, { recursive: true }); fss.mkdirSync(videosDir, { recursive: true });
 const configFile = path.join(dataDir, 'config.json');
 
 export const AREAS = {
@@ -30,6 +31,8 @@ export const AREAS = {
 const DEFAULTS = {
   link: '', segundos: 8, area: 'banda', custom: { x: 0, y: 0, w: 1920, h: 640 },
   camaras: [], camara: '', rotarSeg: 20, color: '#ffd400',
+  // Videos y YouTube a pantalla completa: medios = lista, alAire = { id, n } (n cambia cada vez que se manda, asi vuelve a empezar)
+  medios: [], alAire: null, ajuste: 'llenar', sonido: true,
   logos: [
     { id: 'maxicronos', archivo: 'img/maxicronos.png', nombre: 'Maxi Cronos', activo: true, fijo: true },
     { id: 'panelgo', archivo: 'img/panelgo.png', nombre: 'Panel Go', activo: true, fijo: true },
@@ -89,7 +92,13 @@ function pantalla() {
     ...carrera.screenData(), segundos: config.segundos, area: config.area, custom: config.custom, color: config.color,
     camara: cam ? { id: cam.id, tipo: cam.tipo, nombre: cam.nombre, usb: cam.usb || '' } : null,
     logos: config.logos.filter(l => l.activo).map(l => l.archivo),
+    medio: medioAlAire(), ajuste: config.ajuste, sonido: config.sonido,
   };
+}
+
+function medioAlAire() {
+  const a = config.alAire, m = a && config.medios.find(x => x.id === a.id);
+  return m ? { id: m.id, n: a.n, tipo: m.tipo, src: m.archivo || '', yt: m.yt || '', repetir: Boolean(m.repetir), nombre: m.nombre } : null;
 }
 
 // ---- Cambios de configuracion (todo validado) ----
@@ -101,6 +110,8 @@ async function setConfig(d) {
   if ('camara' in d) config.camara = d.camara === 'rotar' || config.camaras.some(c => c.id === d.camara) ? d.camara : '';
   if ('rotarSeg' in d) config.rotarSeg = Math.min(600, Math.max(5, Number(d.rotarSeg) || 20));
   if ('color' in d && /^#[0-9a-f]{6}$/i.test(d.color)) config.color = d.color;
+  if ('ajuste' in d && ['llenar', 'entero'].includes(d.ajuste)) config.ajuste = d.ajuste;
+  if ('sonido' in d) config.sonido = Boolean(d.sonido);
   await save();
 }
 async function setCamaras(list) {
@@ -141,6 +152,77 @@ async function setLogos(list) {
   config.logos = next;
   await save();
 }
+// ---- Videos y YouTube ----
+const VIDEO_EXT = ['mp4', 'm4v', 'mov', 'webm', 'mkv'];
+// El video se recibe "en crudo" (no en JSON) y se va escribiendo al disco: puede pesar varios GB
+function subirVideo(req, url) {
+  const ext = str(url.searchParams.get('ext'), 5).toLowerCase();
+  if (!VIDEO_EXT.includes(ext)) throw Error('El video tiene que ser MP4, MOV, WEBM o MKV (MP4 es el más seguro)');
+  const id = crypto.randomBytes(5).toString('hex'), file = path.join(videosDir, `${id}.${ext}`);
+  return new Promise((ok, bad) => {
+    let n = 0; const out = fss.createWriteStream(file);
+    const fail = e => { out.destroy(); fs.unlink(file).catch(() => {}); bad(e); };
+    req.on('data', d => { n += d.length; if (n > 8 * 1024 ** 3) { req.destroy(); fail(Error('El video es muy grande (máximo 8 GB)')); } });
+    req.on('aborted', () => fail(Error('Se cortó la subida')));
+    req.pipe(out);
+    out.on('error', fail);
+    out.on('finish', async () => {
+      if (!n) return fail(Error('El archivo llegó vacío'));
+      config.medios.push({ id, tipo: 'video', nombre: str(url.searchParams.get('nombre'), 60) || 'Video', archivo: `media/videos/${id}.${ext}`, repetir: false });
+      await save(); ok();
+    });
+  });
+}
+export function youtubeId(u) {
+  const s = String(u || '').trim();
+  if (/^[\w-]{11}$/.test(s)) return s;
+  const m = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|live\/|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/i.exec(s);
+  return m ? m[1] : null;
+}
+async function agregarYoutube({ url, nombre }) {
+  const yt = youtubeId(url);
+  if (!yt) throw Error('No es un link de YouTube válido (ej. https://www.youtube.com/watch?v=... o https://youtu.be/...)');
+  let titulo = str(nombre, 60);
+  if (!titulo) try { titulo = str((await fetch(`https://www.youtube.com/oembed?format=json&url=https://www.youtube.com/watch?v=${yt}`, { signal: AbortSignal.timeout(4000) }).then(r => r.json())).title, 60); } catch {}
+  config.medios.push({ id: crypto.randomBytes(5).toString('hex'), tipo: 'youtube', nombre: titulo || 'YouTube', yt, repetir: true });
+  await save();
+}
+async function setMedios(list) {
+  if (!Array.isArray(list)) throw Error('Lista inválida');
+  const byId = new Map(config.medios.map(m => [m.id, m])), next = [];
+  for (const x of list) { const m = byId.get(x.id); if (m) { next.push({ ...m, nombre: str(x.nombre, 60) || m.nombre, repetir: Boolean(x.repetir) }); byId.delete(x.id); } }
+  for (const m of byId.values()) if (m.archivo) await fs.unlink(path.join(videosDir, path.basename(m.archivo))).catch(() => {});
+  config.medios = next;
+  if (config.alAire && !next.some(m => m.id === config.alAire.id)) config.alAire = null;
+  await save();
+}
+async function alAire(id) {
+  config.alAire = id && config.medios.some(m => m.id === id) ? { id, n: Date.now() } : null;
+  await save();
+}
+// La pantalla avisa que termino un video sin repetir: se vuelve a los resultados
+async function finVideo({ id, n }) {
+  if (config.alAire && config.alAire.id === id && config.alAire.n === n) { config.alAire = null; await save(); }
+}
+const VTYPES = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/webm' };
+// Videos con "Range" (el navegador pide de a pedazos y puede saltar o repetir sin bajar todo)
+async function serveVideo(req, res, rel) {
+  const file = path.resolve(videosDir, rel);
+  if (!file.startsWith(videosDir + path.sep)) return json(res, 403, { error: 'Ruta no permitida' });
+  let size; try { size = (await fs.stat(file)).size; } catch { return json(res, 404, { error: 'No encontrado' }); }
+  const type = VTYPES[path.extname(file).toLowerCase()] || 'application/octet-stream';
+  const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+  if (m && (m[1] || m[2])) {
+    let start = m[1] ? Number(m[1]) : size - Number(m[2]), end = m[1] && m[2] ? Math.min(Number(m[2]), size - 1) : size - 1;
+    if (start < 0) start = 0;
+    if (start >= size || start > end) { res.writeHead(416, { 'Content-Range': `bytes */${size}` }); return res.end(); }
+    res.writeHead(206, { 'Content-Type': type, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1, 'Cache-Control': 'no-cache' });
+    return fss.createReadStream(file, { start, end }).pipe(res);
+  }
+  res.writeHead(200, { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Content-Length': size, 'Cache-Control': 'no-cache' });
+  fss.createReadStream(file).pipe(res);
+}
+
 // Abre la pantalla a pantalla completa en el segundo monitor (Windows)
 function abrirPantalla() {
   if (process.platform !== 'win32') throw Error('Abrir la pantalla automáticamente funciona en Windows');
@@ -175,6 +257,10 @@ const ROUTES = {
   'POST /api/camaras/reintentar': d => { camEstado.delete(str(d.id, 20)); },
   'POST /api/logos/subir': d => subirLogo(d),
   'POST /api/abrir-pantalla': () => abrirPantalla(),
+  'POST /api/medios': d => setMedios(d.medios),
+  'POST /api/medios/youtube': d => agregarYoutube(d),
+  'POST /api/aire': d => alAire(str(d.id, 20)),
+  'POST /api/aire/fin': d => finVideo({ id: str(d.id, 20), n: Number(d.n) }),
 };
 
 export const server = http.createServer(async (req, res) => {
@@ -183,6 +269,10 @@ export const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/go2rtc/')) return go2rtc.proxy(req, res, url.pathname.slice(7) + url.search);
     if (req.method === 'GET' && url.pathname === '/api/estado') return json(res, 200, estado());
     if (req.method === 'GET' && url.pathname === '/api/pantalla') return json(res, 200, pantalla());
+    if (req.method === 'POST' && url.pathname === '/api/medios/subir') {
+      try { await subirVideo(req, url); } catch (e) { return json(res, 400, { error: e.message }); }
+      return json(res, 200, estado());
+    }
     const route = ROUTES[`${req.method} ${url.pathname}`];
     if (route) {
       const d = req.method === 'POST' ? JSON.parse((await body(req)) || '{}') : {};
@@ -190,6 +280,7 @@ export const server = http.createServer(async (req, res) => {
       return json(res, 200, estado());
     }
     if (url.pathname.startsWith('/api/')) return json(res, 404, { error: 'Ruta desconocida' });
+    if (url.pathname.startsWith('/media/videos/')) return serveVideo(req, res, decodeURIComponent(url.pathname.slice(14)));
     if (url.pathname.startsWith('/media/')) return serveFile(res, logosDir, decodeURIComponent(url.pathname.slice(7)));
     return serveFile(res, path.join(root, 'public'), decodeURIComponent(url.pathname === '/' ? 'index.html' : url.pathname.slice(1)));
   } catch (e) { json(res, 400, { error: e.message }); }

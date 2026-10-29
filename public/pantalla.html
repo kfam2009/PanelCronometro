@@ -64,6 +64,11 @@
   @keyframes rowin{from{opacity:0;transform:translateX(60px)}}
   #arr.on .p{animation:pop .6s cubic-bezier(.2,1.6,.4,1)}
   @keyframes pop{from{transform:scale(.3)}}
+  /* video o YouTube a pantalla completa (tapa todo el area de la LED) */
+  #full{position:absolute;inset:0;z-index:20;background:#000;display:none;overflow:hidden}
+  #full.on{display:block}
+  #full video{width:100%;height:100%;display:block;background:#000}
+  #full iframe{position:absolute;border:0;pointer-events:none}
 </style>
 </head>
 <body>
@@ -74,10 +79,11 @@
     <div class="slide" id="grp"></div>
     <div class="slide" id="rot"></div>
   </div>
-</div></div>
+</div><div id="full"></div></div>
 <script>
 const $ = s => document.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms));
 const demo = new URLSearchParams(location.search).get('demo');
+const preview = new URLSearchParams(location.search).has('preview'); // la vista chica del panel: sin sonido
 const ROWS = 7, LOGO_EVERY = 3;
 let st = null, lastSeq = null, queue = [], showing = false, rotK = 0, logoK = 0, rotTimer = null, newest = null, camKey = '';
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -101,6 +107,42 @@ function layout() {
   document.documentElement.style.setProperty('--y', st.color || '#ffd400');
   document.body.classList.toggle('cam', Boolean(st.camara));
   setCamera(st.camara);
+  setMedio();
+}
+
+// ---- Video subido o YouTube a pantalla completa ----
+let medKey = '';
+function setMedio() {
+  const m = st.medio, full = $('#full');
+  const key = m ? `${m.id}:${m.n}:${st.sonido}` : '';
+  if (key !== medKey) {
+    medKey = key; full.replaceChildren(); full.classList.toggle('on', Boolean(m));
+    if (m && m.tipo === 'video') {
+      const v = document.createElement('video');
+      v.src = m.src; v.autoplay = true; v.playsInline = true; v.loop = m.repetir; v.muted = preview || !st.sonido;
+      // termino (sin repetir): se vuelve a los resultados
+      v.onended = () => { if (!preview && !v.loop) fetch('/api/aire/fin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id, n: m.n }) }).catch(() => {}); };
+      full.append(v);
+      // si el navegador no deja arrancar con sonido, arranca sin sonido
+      v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+    } else if (m) {
+      const f = document.createElement('iframe');
+      f.allow = 'autoplay; encrypted-media'; f.referrerPolicy = 'strict-origin-when-cross-origin';
+      f.src = `https://www.youtube.com/embed/${encodeURIComponent(m.yt)}?autoplay=1&mute=${preview || !st.sonido ? 1 : 0}&controls=0&rel=0&playsinline=1&iv_load_policy=3&disablekb=1&modestbranding=1&loop=1&playlist=${encodeURIComponent(m.yt)}`;
+      full.append(f);
+    }
+  }
+  if (!m) return;
+  const v = full.querySelector('video');
+  if (v) { v.style.objectFit = st.ajuste === 'entero' ? 'contain' : 'cover'; v.loop = m.repetir; }
+  const f = full.querySelector('iframe');
+  if (f) {
+    // YouTube es 16:9: "llenar" lo agranda hasta cubrir la LED (recorta arriba/abajo); "entero" lo muestra completo con bordes
+    const W = full.clientWidth, H = full.clientHeight; let w, h;
+    if (st.ajuste === 'entero') { h = H; w = H * 16 / 9; if (w > W) { w = W; h = W * 9 / 16; } }
+    else { w = W; h = W * 9 / 16; if (h < H) { h = H; w = H * 16 / 9; } }
+    Object.assign(f.style, { width: w + 'px', height: h + 'px', left: (W - w) / 2 + 'px', top: (H - h) / 2 + 'px' });
+  }
 }
 addEventListener('resize', () => st && layout());
 
@@ -224,7 +266,8 @@ async function poll() {
     if (lastSeq === null) { lastSeq = st.seq; rotate(); }
     else if (st.seq < lastSeq) lastSeq = st.seq;
     for (const f of st.feed) if (f.seq > lastSeq) queue.push(f.a);
-    lastSeq = Math.max(lastSeq, st.seq); runQueue();
+    // con un video al aire las llegadas esperan; al volver se muestran (si son 3 o mas, juntas)
+    lastSeq = Math.max(lastSeq, st.seq); if (!st.medio) runQueue();
   } catch (e) {}
   setTimeout(poll, 400);
 }

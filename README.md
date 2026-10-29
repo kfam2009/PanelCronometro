@@ -33,9 +33,12 @@ Todo se maneja desde un **panel** que se abre en la PC o en el **celular** (mism
 2. **CARGAR TODOS** trae los resultados que ya existan (para tener las tablas desde el principio).
 3. **Cámaras**: agregar las IP (dirección RTSP/SRT) o USB, **GUARDAR CÁMARAS**, y elegir cuál va en la pantalla.
 4. **Logos y publicidad**: subir imágenes; tocarlas para prender/apagar.
-5. **ABRIR EN LA PANTALLA**: la abre a pantalla completa en el segundo monitor (el HDMI de la LED).
+5. **Video y YouTube**: subir un video (MP4) o pegar un link de YouTube (video o en vivo) y tocar **AL AIRE**:
+   se ve a pantalla completa en la LED. Un video sin "repetir" vuelve solo a los resultados al terminar;
+   si no, **VOLVER A RESULTADOS**. Mientras tanto las llegadas esperan y salen después.
+6. **ABRIR EN LA PANTALLA**: la abre a pantalla completa en el segundo monitor (el HDMI de la LED).
    También se puede abrir con **AbrirPantalla.cmd**. Para cerrarla: Alt+F4.
-6. **Dónde va en la salida HDMI**: si el procesador de la LED toma la imagen 1:1, elegir la opción que
+7. **Dónde va en la salida HDMI**: si el procesador de la LED toma la imagen 1:1, elegir la opción que
    coincida (banda arriba, centrada, 768×256, o personalizada).
 
 **Pruebas**: escribir un dorsal y **SIMULAR LLEGADA** (entra como si hubiera cruzado).
