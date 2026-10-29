@@ -1,0 +1,139 @@
+// PanelCronometro - panel de configuracion (PC o celular)
+const $ = s => document.querySelector(s);
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+let st = null, busy = false, camDraft = null, usbList = [];
+const sigs = {};
+// Solo se redibuja lo que cambio: si se rearman los botones mientras se hace clic, el clic se pierde
+const changed = (k, v) => { const s = JSON.stringify(v); if (sigs[k] === s) return false; sigs[k] = s; return true; };
+
+function toast(m) { const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 4500); }
+async function api(route, data) {
+  const r = await fetch('/api/' + route, { ...(data ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) } : { cache: 'no-store' }), signal: AbortSignal.timeout(data ? 25000 : 8000) });
+  const j = await r.json(); if (!r.ok) throw Error(j.error || 'No se pudo completar'); return j;
+}
+async function act(route, data, msg) {
+  if (busy) return; busy = true;
+  try { st = await api(route, data || {}); render(); if (msg) toast(msg); }
+  catch (e) { toast(e.name === 'TimeoutError' ? 'El programa no respondió, probá de nuevo' : e.message); }
+  finally { busy = false; }
+}
+const ago = t => { if (!t) return 'sin datos todavía'; const s = Math.round((Date.now() - t) / 1000); return s < 60 ? `hace ${s} s` : `hace ${Math.round(s / 60)} min`; };
+const focused = id => document.activeElement === $(id);
+
+function render() {
+  if (!st) return;
+  const S = st.status, C = st.config;
+  $('#ver').textContent = 'PanelCronometro ' + st.version;
+  // Cronometraje
+  if (!focused('#link') && changed('link', C.link)) $('#link').value = C.link || '';
+  $('#conn').textContent = !C.link ? 'SIN LINK' : S.conectado ? 'CONECTADO' : 'RECONECTANDO';
+  $('#conn').className = 'pill' + (S.conectado ? ' ok' : C.link ? ' warn' : '');
+  $('#info').textContent = [S.error, st.evento, C.link && S.conectado && `último dato ${ago(S.ultimoMensaje)}`, `${st.llegaron} con tiempo de ${st.total} corredores`,
+    S.scanning && `Cargando dorsales ${S.scanning.hechos}/${S.scanning.total} (${S.scanning.encontrados} encontrados)`].filter(Boolean).join(' · ');
+  // Pantalla
+  if (changed('area', [st.areas, C.area, C.custom])) {
+    $('#area').replaceChildren(...Object.entries(st.areas).map(([k, v]) => new Option(v, k))); $('#area').value = C.area;
+    $('#custom').hidden = C.area !== 'custom';
+    for (const k of ['x', 'y', 'w', 'h']) $('#c' + k).value = C.custom[k];
+  }
+  if (!focused('#seg') && changed('seg', C.segundos)) $('#seg').value = C.segundos;
+  if (!focused('#color') && changed('color', C.color)) $('#color').value = C.color;
+  // Camaras
+  const g = st.go2rtc;
+  $('#g2r').textContent = g.error ? 'CÁMARAS IP: ' + (g.instalado ? 'ERROR' : 'FALTA go2rtc') : g.corriendo ? 'CÁMARAS IP LISTAS' : 'SIN CÁMARAS IP';
+  $('#g2r').className = 'pill' + (g.error ? ' bad' : g.corriendo ? ' ok' : '');
+  $('#g2r').title = g.error || '';
+  if (changed('camSel', [C.camaras.map(c => [c.id, c.nombre]), C.camara]) && !focused('#camSel')) {
+    $('#camSel').replaceChildren(new Option('Sin cámara (solo resultados)', ''), ...C.camaras.map(c => new Option(c.nombre, c.id)), ...(C.camaras.length > 1 ? [new Option('Rotar entre todas', 'rotar')] : []));
+    $('#camSel').value = C.camara || '';
+  }
+  $('#rotWrap').hidden = C.camara !== 'rotar';
+  if (!focused('#rotSeg') && changed('rot', C.rotarSeg)) $('#rotSeg').value = C.rotarSeg;
+  if (!camDraft) drawCams(C.camaras, st.camaraActual);
+  // Logos
+  if (changed('logos', C.logos)) {
+    $('#logos').replaceChildren(...C.logos.map(l => {
+      const d = el('div', 'logo' + (l.activo ? ' on' : '')); d.title = l.activo ? 'Prendido: tocá para apagarlo' : 'Apagado: tocá para prenderlo';
+      const img = el('img'); img.src = l.archivo; img.alt = '';
+      d.append(img, el('span', '', l.nombre));
+      d.onclick = () => act('logos', { logos: C.logos.map(x => x.id === l.id ? { ...x, activo: !x.activo } : x) });
+      if (!l.fijo) { const x = el('button', 'x', '×'); x.title = 'Borrar'; x.onclick = e => { e.stopPropagation(); if (confirm(`¿Borrar "${l.nombre}"?`)) act('logos', { logos: C.logos.filter(y => y.id !== l.id) }, 'Imagen borrada'); }; d.append(x); }
+      return d;
+    }));
+  }
+  // Llegadas
+  if (changed('list', st.recientes.map(a => [a.pid, a.t]))) {
+    $('#list').replaceChildren(...(st.recientes.length ? st.recientes.map(a => {
+      const r = el('div', 'it');
+      r.append(el('b', '', a.pos ? a.pos + '°' : '-'), el('span', 'n', a.nombre), el('span', 'm', `#${a.bib} · ${a.dist}${a.cat ? ' · Cat. ' + a.cat + '°' : ''}`), el('b', 't', a.tiempo || '--'));
+      return r;
+    }) : [el('p', 'muted', 'Todavía no llegó nadie. Para probar: escribí un dorsal y tocá SIMULAR LLEGADA.')]));
+  }
+  if (changed('urls', st.urls)) $('#urls').textContent = st.urls.length ? 'Desde el celular: ' + st.urls.join(' · ') : '';
+}
+
+// ---- Camaras (se editan en borrador y se guardan juntas) ----
+function drawCams(list, actual) {
+  const box = $('#cams'); box.replaceChildren();
+  if (!list.length) box.append(el('p', 'muted', 'No hay cámaras. Agregá una IP o una USB/capturadora.'));
+  list.forEach((c, i) => {
+    const row = el('div', 'cam' + (actual === c.id ? ' on' : ''));
+    const name = el('input'); name.value = c.nombre; name.placeholder = 'Nombre'; name.oninput = () => edit(i, { nombre: name.value });
+    const tipo = el('span', 'pill', c.tipo === 'usb' ? 'USB' : 'IP');
+    let src;
+    if (c.tipo === 'usb') {
+      src = el('select');
+      const opts = [...new Set([...usbList, c.usb].filter(Boolean))];
+      src.replaceChildren(new Option(opts.length ? 'Elegí el dispositivo' : 'Tocá acá para buscar dispositivos', ''), ...opts.map(o => new Option(o, o)));
+      src.value = c.usb || ''; src.onfocus = loadUsb; src.onchange = () => edit(i, { usb: src.value });
+    } else { src = el('input'); src.value = c.url; src.placeholder = 'rtsp://usuario:clave@IP:554/...'; src.oninput = () => edit(i, { url: src.value }); }
+    const del = el('button', 'btn del', 'QUITAR'); del.onclick = () => { camDraft = (camDraft || structuredClone(list)).filter((_, j) => j !== i); dirty(); };
+    row.append(name, tipo, src, del); box.append(row);
+  });
+}
+function edit(i, patch) { camDraft ||= structuredClone(st.config.camaras); Object.assign(camDraft[i], patch); $('#saveCams').hidden = false; }
+function dirty() { $('#saveCams').hidden = false; drawCams(camDraft, st.camaraActual); }
+async function loadUsb() {
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t => t.stop());
+    usbList = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput').map(d => d.label).filter(Boolean);
+    if (camDraft) drawCams(camDraft, st.camaraActual);
+  } catch { toast('Las cámaras USB se eligen desde la PC donde están conectadas'); }
+}
+
+async function poll() {
+  if (!busy) { try { st = await api('estado'); render(); } catch { $('#conn').textContent = 'SIN PROGRAMA'; $('#conn').className = 'pill bad'; } }
+  setTimeout(poll, 1500);
+}
+function fitPreview() { const p = $('.prev'); $('#preview').style.transform = `scale(${p.clientWidth / 1920})`; }
+addEventListener('resize', fitPreview);
+
+$('#saveLink').onclick = () => act('link', { link: $('#link').value }, 'Link guardado, conectando...');
+$('#link').onkeydown = e => { if (e.key === 'Enter') $('#saveLink').click(); };
+$('#open').onclick = () => act('abrir-pantalla', {}, 'Abriendo la pantalla en el segundo monitor');
+$('#area').onchange = () => act('config', { area: $('#area').value });
+$('#applyCustom').onclick = () => act('config', { area: 'custom', custom: Object.fromEntries(['x', 'y', 'w', 'h'].map(k => [k, Number($('#c' + k).value)])) }, 'Área aplicada');
+$('#seg').onchange = () => act('config', { segundos: Number($('#seg').value) });
+$('#color').onchange = () => act('config', { color: $('#color').value });
+$('#camSel').onchange = () => act('config', { camara: $('#camSel').value }, 'Cámara de la pantalla cambiada');
+$('#rotSeg').onchange = () => act('config', { rotarSeg: Number($('#rotSeg').value) });
+$('#addIp').onclick = () => { camDraft = [...(camDraft || structuredClone(st.config.camaras)), { nombre: 'Cámara ' + ((camDraft || st.config.camaras).length + 1), tipo: 'ip', url: '' }]; dirty(); };
+$('#addUsb').onclick = () => { camDraft = [...(camDraft || structuredClone(st.config.camaras)), { nombre: 'USB ' + ((camDraft || st.config.camaras).length + 1), tipo: 'usb', usb: '' }]; dirty(); loadUsb(); };
+$('#saveCams').onclick = async () => {
+  const d = camDraft; camDraft = null; $('#saveCams').hidden = true; sigs.camSel = '';
+  await act('camaras', { camaras: d }, 'Cámaras guardadas');
+};
+$('#file').onchange = async () => {
+  for (const f of $('#file').files) {
+    if (f.size > 8 * 1024 * 1024) { toast(`${f.name}: muy grande (máximo 8 MB)`); continue; }
+    const data = await new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(f); });
+    await act('logos/subir', { nombre: f.name.replace(/\.[^.]+$/, ''), data }, 'Imagen agregada');
+  }
+  $('#file').value = '';
+};
+$('#sim').onclick = () => act('simular', { bib: $('#bib').value.trim() }, 'Llegada simulada: dorsal ' + $('#bib').value.trim());
+$('#bib').onkeydown = e => { if (e.key === 'Enter') $('#sim').click(); };
+$('#scan').onclick = () => act('cargar', { max: 1000 }, 'Cargando todos los dorsales (tarda un minuto)');
+$('#clear').onclick = () => { if (confirm('¿Borrar todas las llegadas guardadas? (para empezar un evento nuevo)')) act('borrar', {}, 'Llegadas borradas'); };
+
+fitPreview(); poll();

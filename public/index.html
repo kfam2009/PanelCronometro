@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PanelCronometro</title>
+<link rel="stylesheet" href="panel.css">
+<script type="module" src="panel.js"></script>
+</head>
+<body>
+<header class="top">
+  <img class="brand-l" src="img/panelgo-mark.svg" alt="Panel Go">
+  <div class="title"><b>PANTALLA DE LLEGADAS</b><span id="ver">PanelCronometro</span></div>
+  <img class="brand-r" src="img/maxicronos.png" alt="Maxi Cronos">
+</header>
+
+<main>
+  <section class="card">
+    <div class="head"><h2>Cronometraje</h2><span id="conn" class="pill">SIN LINK</span></div>
+    <div class="row"><input id="link" autocomplete="off" placeholder="Pegá el link del presenter de RaceResult (https://events.raceresult.com/presenters/?event=...)"><button id="saveLink" class="btn go">GUARDAR</button></div>
+    <p id="info" class="muted"></p>
+  </section>
+
+  <section class="card">
+    <div class="head"><h2>Pantalla</h2><button id="open" class="btn go">ABRIR EN LA PANTALLA</button></div>
+    <div class="prev"><iframe id="preview" src="pantalla.html" title="Vista de la pantalla" tabindex="-1"></iframe></div>
+    <div class="grid3">
+      <label>Dónde va en la salida HDMI<select id="area"></select></label>
+      <label>Cada página dura (seg)<input id="seg" type="number" min="3" max="30"></label>
+      <label>Color<input id="color" type="color"></label>
+    </div>
+    <div id="custom" class="grid4" hidden>
+      <label>X<input id="cx" type="number"></label><label>Y<input id="cy" type="number"></label><label>Ancho<input id="cw" type="number"></label><label>Alto<input id="ch" type="number"></label>
+      <button id="applyCustom" class="btn">APLICAR</button>
+    </div>
+    <p class="muted">"Abrir en la pantalla" la abre a pantalla completa en el segundo monitor de esta PC (el HDMI de la LED). Para cerrarla: Alt+F4.</p>
+  </section>
+
+  <section class="card">
+    <div class="head"><h2>Cámaras</h2><span id="g2r" class="pill"></span></div>
+    <label class="inline">Cámara en la pantalla <select id="camSel"></select></label>
+    <label class="inline" id="rotWrap">cambiar cada <input id="rotSeg" type="number" min="5" max="600"> seg</label>
+    <div id="cams" class="cams"></div>
+    <div class="row"><button id="addIp" class="btn">+ CÁMARA IP</button><button id="addUsb" class="btn">+ CÁMARA USB / CAPTURADORA</button><button id="saveCams" class="btn go" hidden>GUARDAR CÁMARAS</button></div>
+    <p class="muted">IP: dirección RTSP o SRT de la cámara (ej. rtsp://usuario:clave@192.168.1.50:554/stream1). USB: se elige en esta PC.</p>
+  </section>
+
+  <section class="card">
+    <div class="head"><h2>Logos y publicidad</h2><label class="btn upload">+ SUBIR IMAGEN<input id="file" type="file" accept="image/*" multiple hidden></label></div>
+    <div id="logos" class="logos"></div>
+    <p class="muted">Van rotando entre las tablas, uno cada 3 páginas. Tocá un logo para prenderlo o apagarlo.</p>
+  </section>
+
+  <section class="card">
+    <div class="head"><h2>Llegadas</h2><span class="muted">las últimas 15</span></div>
+    <div id="list" class="list"></div>
+    <div class="row tests"><input id="bib" class="bib" placeholder="Dorsal" inputmode="numeric" autocomplete="off"><button id="sim" class="btn go">SIMULAR LLEGADA</button><button id="scan" class="btn">CARGAR TODOS</button><button id="clear" class="btn del">BORRAR TODO</button></div>
+  </section>
+
+  <footer><span id="urls"></span><span>Panel Go · Maxi Cronos</span></footer>
+</main>
+<div id="toast" hidden></div>
+</body>
+</html>
