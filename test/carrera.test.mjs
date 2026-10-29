@@ -65,3 +65,10 @@ test('Circuito completo con un RaceResult de prueba: link, en vivo, simular, car
     C2.disconnect();
   } finally { C.disconnect(); rr.close(); clearTimeout(C.saveTimer); }
 });
+
+test('Errores de cámara: la clave mal se reconoce para no insistir', async () => {
+  const { clasificar } = await import('../lib/camaras.mjs');
+  assert.equal(clasificar('mse: streams: wrong user/pass').estado, 'clave');
+  assert.equal(clasificar('rtsp: 401 Unauthorized').estado, 'clave');
+  assert.equal(clasificar('mse: streams: dial tcp 192.168.1.9:554: i/o timeout').estado, 'red');
+});

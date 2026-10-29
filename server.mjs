@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { Carrera } from './lib/carrera.mjs';
 import { Go2rtc } from './lib/camaras.mjs';
 
-export const VERSION = '1.0.1';
+export const VERSION = '1.1.0';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 5100);
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
@@ -49,6 +49,21 @@ const go2rtc = new Go2rtc({ root });
 carrera.ready.then(() => { if (config.link) carrera.connect(); });
 go2rtc.apply(config.camaras);
 
+// Estado de cada camara IP: { estado: 'ok'|'clave'|'red', error, t }
+// Con 'clave' no se vuelve a intentar hasta que se corrija la direccion (o se toque REINTENTAR):
+// varias camaras (Foscam y otras) bloquean a la PC entera despues de varios intentos fallidos.
+const camEstado = new Map();
+let probing = false;
+async function vigilarCamara() {
+  const c = camaraActual();
+  if (probing || !c || c.tipo !== 'ip') return;
+  const e = camEstado.get(c.id);
+  if (e && (e.estado === 'ok' || e.estado === 'clave' || Date.now() - e.t < 20000)) return;
+  probing = true;
+  try { camEstado.set(c.id, { ...(await go2rtc.probe(c.id)), t: Date.now() }); } finally { probing = false; }
+}
+setInterval(() => vigilarCamara().catch(() => {}), 2000).unref();
+
 // Camara que se ve ahora en la pantalla (fija o rotando)
 function camaraActual() {
   const cams = config.camaras;
@@ -63,10 +78,13 @@ function estado() {
   return {
     version: VERSION, urls: lanUrls(), areas: AREAS, go2rtc: go2rtc.state(),
     config: { ...config }, camaraActual: camaraActual()?.id || null, ...carrera.summary(),
+    camEstado: Object.fromEntries(config.camaras.map(c => [c.id, c.tipo === 'usb' ? { estado: 'ok', error: '' } : camEstado.get(c.id) || { estado: 'probando', error: '' }])),
   };
 }
 function pantalla() {
-  const cam = camaraActual();
+  let cam = camaraActual();
+  // la pantalla solo se conecta a una camara IP que ya respondio bien (asi no insiste con una clave mal)
+  if (cam && cam.tipo === 'ip' && camEstado.get(cam.id)?.estado !== 'ok') cam = null;
   return {
     ...carrera.screenData(), segundos: config.segundos, area: config.area, custom: config.custom, color: config.color,
     camara: cam ? { id: cam.id, tipo: cam.tipo, nombre: cam.nombre, usb: cam.usb || '' } : null,
@@ -87,12 +105,17 @@ async function setConfig(d) {
 }
 async function setCamaras(list) {
   if (!Array.isArray(list) || list.length > 16) throw Error('Lista de cámaras inválida');
+  const prevCams = config.camaras;
   config.camaras = list.map(c => ({
     id: typeof c.id === 'string' && /^[a-z0-9]{4,16}$/i.test(c.id) ? c.id : crypto.randomBytes(4).toString('hex'),
     nombre: str(c.nombre, 40) || 'Cámara', tipo: c.tipo === 'usb' ? 'usb' : 'ip',
     url: c.tipo === 'usb' ? '' : str(c.url, 500), usb: c.tipo === 'usb' ? str(c.usb, 200) : '',
   })).filter(c => c.tipo === 'usb' || /^(rtsp|rtsps|srt|rtmp|http|https):\/\//i.test(c.url));
   if (config.camara && config.camara !== 'rotar' && !config.camaras.some(c => c.id === config.camara)) config.camara = '';
+  // si cambio la direccion de una camara, se vuelve a probar
+  const prev = new Map(prevCams.map(c => [c.id, c.url]));
+  for (const c of config.camaras) if (prev.get(c.id) !== c.url) camEstado.delete(c.id);
+  for (const id of camEstado.keys()) if (!config.camaras.some(c => c.id === id)) camEstado.delete(id);
   await save();
   go2rtc.apply(config.camaras);
 }
@@ -148,6 +171,7 @@ const ROUTES = {
   'POST /api/config': d => setConfig(d),
   'POST /api/camaras': d => setCamaras(d.camaras),
   'POST /api/logos': d => setLogos(d.logos),
+  'POST /api/camaras/reintentar': d => { camEstado.delete(str(d.id, 20)); },
   'POST /api/logos/subir': d => subirLogo(d),
   'POST /api/abrir-pantalla': () => abrirPantalla(),
 };

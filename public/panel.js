@@ -49,7 +49,7 @@ function render() {
   }
   $('#rotWrap').hidden = C.camara !== 'rotar';
   if (!focused('#rotSeg') && changed('rot', C.rotarSeg)) $('#rotSeg').value = C.rotarSeg;
-  if (!camDraft) drawCams(C.camaras, st.camaraActual);
+  if (!camDraft && changed('cams', [C.camaras, st.camaraActual, st.camEstado])) drawCams(C.camaras, st.camaraActual);
   // Logos
   if (changed('logos', C.logos)) {
     $('#logos').replaceChildren(...C.logos.map(l => {
@@ -69,7 +69,7 @@ function render() {
       return r;
     }) : [el('p', 'muted', 'Todavía no llegó nadie. Para probar: escribí un dorsal y tocá SIMULAR LLEGADA.')]));
   }
-  if (changed('urls', st.urls)) $('#urls').textContent = st.urls.length ? 'Desde el celular: ' + st.urls.join(' · ') : '';
+  if (changed('urls', st.urls)) $('#urls').textContent = st.urls.length ? 'Desde el celular: ' + st.urls.filter(u => u.includes('192.168.') || u.includes('10.')).concat(st.urls).slice(0, 1).join('') : '';
 }
 
 // ---- Camaras (se editan en borrador y se guardan juntas) ----
@@ -87,12 +87,22 @@ function drawCams(list, actual) {
       src.replaceChildren(new Option(opts.length ? 'Elegí el dispositivo' : 'Tocá acá para buscar dispositivos', ''), ...opts.map(o => new Option(o, o)));
       src.value = c.usb || ''; src.onfocus = loadUsb; src.onchange = () => edit(i, { usb: src.value });
     } else { src = el('input'); src.value = c.url; src.placeholder = 'rtsp://usuario:clave@IP:554/...'; src.oninput = () => edit(i, { url: src.value }); }
-    const del = el('button', 'btn del', 'QUITAR'); del.onclick = () => { camDraft = (camDraft || structuredClone(list)).filter((_, j) => j !== i); dirty(); };
-    row.append(name, tipo, src, del); box.append(row);
+    const del = el('button', 'btn del mini', 'QUITAR'); del.onclick = () => { camDraft = (camDraft || structuredClone(list)).filter((_, j) => j !== i); dirty(); };
+    row.append(name, tipo, src, del);
+    // Estado de la camara (solo las ya guardadas)
+    const e = !camDraft && c.id && st.camEstado?.[c.id];
+    if (e && c.tipo === 'ip' && (actual === c.id || e.estado !== 'probando')) {
+      const txt = { ok: '● Con señal', clave: '● Usuario o clave incorrectos: no se vuelve a intentar para que la cámara no se bloquee. Corregí la dirección y guardá.', red: '● ' + (e.error || 'No responde') + ' (se reintenta cada 20 s)', probando: '● Probando...' }[e.estado] || '';
+      const stl = el('div', 'st ' + (e.estado === 'ok' ? 'ok' : e.estado === 'probando' ? '' : 'bad'), txt);
+      if (e.estado === 'clave' || e.estado === 'red') { const re = el('button', 'btn mini', 'REINTENTAR'); re.style.marginLeft = '8px'; re.onclick = () => act('camaras/reintentar', { id: c.id }, 'Probando la cámara de nuevo'); stl.append(re); }
+      row.append(stl);
+    }
+    box.append(row);
   });
 }
 function edit(i, patch) { camDraft ||= structuredClone(st.config.camaras); Object.assign(camDraft[i], patch); $('#saveCams').hidden = false; }
 function dirty() { $('#saveCams').hidden = false; drawCams(camDraft, st.camaraActual); }
+new ResizeObserver(() => fitPreview()).observe(document.querySelector('.prev'));
 async function loadUsb() {
   try {
     const s = await navigator.mediaDevices.getUserMedia({ video: true }); s.getTracks().forEach(t => t.stop());
@@ -105,7 +115,7 @@ async function poll() {
   if (!busy) { try { st = await api('estado'); render(); } catch { $('#conn').textContent = 'SIN PROGRAMA'; $('#conn').className = 'pill bad'; } }
   setTimeout(poll, 1500);
 }
-function fitPreview() { const p = $('.prev'); $('#preview').style.transform = `scale(${p.clientWidth / 1920})`; }
+function fitPreview() { const p = $('.prev'); $('#preview').style.transform = `scale(${Math.min(p.clientWidth / 1920, p.clientHeight / 640)})`; }
 addEventListener('resize', fitPreview);
 
 $('#saveLink').onclick = () => act('link', { link: $('#link').value }, 'Link guardado, conectando...');

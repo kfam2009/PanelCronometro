@@ -22,7 +22,7 @@
   .slide.on{opacity:1;transform:none}
   /* encabezado: Panel Go a la izquierda, titulo, Maxi Cronos a la derecha */
   .hd{height:84px;flex:none;display:flex;align-items:center;gap:22px;padding:0 24px;background:#0b0d12;border-bottom:6px solid var(--y);color:var(--y);font-weight:900;font-size:48px;letter-spacing:1px;text-transform:uppercase;white-space:nowrap}
-  .hd .pgo{height:52px;flex:none}
+  .hd .pgo{height:82px;flex:none;margin-left:-10px}
   .hd .tt{overflow:hidden;text-overflow:ellipsis}
   .hd .pg{font-size:28px;font-weight:800;color:var(--sub)}
   .hd .mx{height:66px;margin-left:auto;flex:none}
@@ -81,7 +81,7 @@ const demo = new URLSearchParams(location.search).get('demo');
 const ROWS = 7, LOGO_EVERY = 3;
 let st = null, lastSeq = null, queue = [], showing = false, rotK = 0, logoK = 0, rotTimer = null, newest = null, camKey = '';
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const HD = (t, pg) => `<div class="hd"><img class="pgo" src="img/panelgo-mark.svg" alt=""><span class="tt">${t}</span>${pg ? `<span class="pg">${esc(pg)}</span>` : ''}<img class="mx" src="img/maxicronos.png" alt=""></div>`;
+const HD = (t, pg) => `<div class="hd"><img class="pgo" src="img/panelgo.png" alt=""><span class="tt">${t}</span>${pg ? `<span class="pg">${esc(pg)}</span>` : ''}<img class="mx" src="img/maxicronos.png" alt=""></div>`;
 
 // Donde va la imagen 3:1 dentro de la ventana (la salida HDMI)
 function area() {
