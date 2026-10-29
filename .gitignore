@@ -2,3 +2,5 @@ data/
 tools/
 node_modules/
 *.log
+build/bin/
+dist/

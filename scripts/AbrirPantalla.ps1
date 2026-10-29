@@ -1,9 +1,10 @@
 # PanelCronometro - abre la pantalla a pantalla completa en la salida elegida en el panel (ej. el HDMI de la LED).
 # Sin eleccion (o si esa salida ya no esta): el monitor que no es el principal; si hay uno solo, ese. Para cerrarla: Alt+F4.
-param([int]$Port = 5100, [string]$Monitor = '')
+param([int]$Port = 5100, [string]$Monitor = '', [string]$Root = '', [string]$DataDir = '')
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$log = Join-Path $root 'data\abrir-pantalla.log'
+if (-not $Root) { $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path) }
+if (-not $DataDir) { $DataDir = Join-Path $Root 'data' }
+$log = Join-Path $DataDir 'abrir-pantalla.log'
 function Log($m) { Add-Content -Path $log -Value ((Get-Date -Format 'HH:mm:ss') + ' ' + $m) }
 trap { Log ('ERROR: ' + $_.Exception.Message); exit 1 }
 Add-Type @'
@@ -17,7 +18,7 @@ public static class W32 {
 [void][W32]::SetProcessDPIAware()  # medidas reales en pixeles (si Windows tiene escala 125/150%)
 Add-Type -AssemblyName System.Windows.Forms
 Log "---- Monitor pedido: '$Monitor'"
-$profileDir = Join-Path $root 'data\perfil-pantalla'
+$profileDir = Join-Path $DataDir 'perfil-pantalla'
 
 $screens = [System.Windows.Forms.Screen]::AllScreens
 $target = $null

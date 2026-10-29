@@ -11,15 +11,21 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Carrera } from './lib/carrera.mjs';
 import { Go2rtc } from './lib/camaras.mjs';
+import { leer } from './lib/recursos.mjs';
 
-export const VERSION = '1.4.1';
-const root = path.dirname(fileURLToPath(import.meta.url));
+export const VERSION = '1.4.2';
+const root = process.env.PC_ROOT || path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 5100);
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
 const logosDir = path.join(dataDir, 'logos');
 const videosDir = path.join(dataDir, 'videos');
 fss.mkdirSync(logosDir, { recursive: true }); fss.mkdirSync(videosDir, { recursive: true });
 const configFile = path.join(dataDir, 'config.json');
+// Para armar el instalador: se guarda una copia del Node con el que corre (tools/node.exe), una sola vez
+if (process.platform === 'win32' && !process.env.PC_KEY) {
+  const dest = path.join(root, 'tools', 'node.exe');
+  if (!fss.existsSync(dest)) try { fss.mkdirSync(path.dirname(dest), { recursive: true }); fss.copyFileSync(process.execPath, dest); } catch {}
+}
 
 export const AREAS = {
   completa: 'Toda la salida (la salida HDMI ya es 3:1)',
@@ -82,7 +88,7 @@ function lanUrls() {
 }
 function estado() {
   return {
-    version: VERSION, urls: lanUrls(), areas: AREAS, go2rtc: go2rtc.state(),
+    version: VERSION, node: process.version, urls: lanUrls(), areas: AREAS, go2rtc: go2rtc.state(),
     config: { ...config }, camaraActual: camaraActual()?.id || null, ...carrera.summary(),
     camEstado: Object.fromEntries(config.camaras.map(c => [c.id, c.tipo === 'usb' ? { estado: 'ok', error: '' } : camEstado.get(c.id) || { estado: 'probando', error: '' }])),
   };
@@ -229,6 +235,14 @@ async function serveVideo(req, res, rel) {
 }
 
 // Abre la pantalla a pantalla completa en el segundo monitor (Windows)
+// Ejecuta un script de scripts/ (del paquete cifrado o de la carpeta) sin dejar el archivo a la vista
+function powershell(nombre, params) {
+  const txt = String(leer(root, 'scripts/' + nombre) || '').replace(/^\uFEFF/, '');
+  const q = v => `'${String(v).replace(/'/g, "''")}'`;
+  const cmd = `& {\n${txt}\n} ` + Object.entries(params).filter(([, v]) => v !== '' && v != null).map(([k, v]) => `-${k} ${q(v)}`).join(' ');
+  return spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(cmd, 'utf16le').toString('base64')], { windowsHide: true });
+}
+
 // Salidas de video de esta PC (monitores / HDMI), leidas de Windows
 let monCache = { t: 0, list: [] };
 function monitores() {
@@ -236,7 +250,7 @@ function monitores() {
   if (Date.now() - monCache.t < 5000) return Promise.resolve(monCache.list);
   return new Promise(resolve => {
     let out = '';
-    const p = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts', 'Monitores.ps1')], { windowsHide: true });
+    const p = powershell('Monitores.ps1', {});
     const t = setTimeout(() => p.kill(), 10000);
     p.stdout.on('data', d => out += d);
     p.on('error', () => { clearTimeout(t); resolve(monCache.list); });
@@ -259,11 +273,11 @@ function monitores() {
 
 function abrirPantalla() {
   if (process.platform !== 'win32') throw Error('Abrir la pantalla automáticamente funciona en Windows');
-  const ps = path.join(root, 'scripts', 'AbrirPantalla.ps1'), logFile = path.join(dataDir, 'abrir-pantalla.log');
+  const logFile = path.join(dataDir, 'abrir-pantalla.log');
   // lo que diga PowerShell (errores incluidos) queda en data/abrir-pantalla.log; si falla, se avisa en el panel
   return new Promise((ok, bad) => {
     let out = '';
-    const p = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps, '-Port', String(PORT), ...(config.monitor ? ['-Monitor', config.monitor] : [])], { windowsHide: true });
+    const p = powershell('AbrirPantalla.ps1', { Port: PORT, Monitor: config.monitor, Root: root, DataDir: dataDir });
     p.stdout.on('data', d => out += d); p.stderr.on('data', d => out += d);
     p.on('error', e => bad(Error('No se pudo ejecutar PowerShell: ' + e.message)));
     p.on('close', code => {
@@ -278,6 +292,12 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 const json = (res, code, v) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(v)); };
 const body = req => new Promise((ok, bad) => { let n = 0; const c = []; req.on('data', d => { n += d.length; if (n > 12e6) { bad(Error('Demasiado grande')); req.destroy(); } else c.push(d); }); req.on('end', () => ok(Buffer.concat(c).toString('utf8'))); req.on('error', bad); });
 
+function servePublic(res, rel) {
+  const data = leer(root, 'public/' + rel);
+  if (!data) return json(res, 404, { error: 'No encontrado' });
+  res.writeHead(200, { 'Content-Type': TYPES[path.extname(rel).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+  res.end(data);
+}
 async function serveFile(res, base, rel) {
   const file = path.resolve(base, rel);
   if (file !== base && !file.startsWith(base + path.sep)) return json(res, 403, { error: 'Ruta no permitida' });
@@ -317,6 +337,11 @@ export const server = http.createServer(async (req, res) => {
       try { await subirVideo(req, url); } catch (e) { return json(res, 400, { error: e.message }); }
       return json(res, 200, estado());
     }
+    // cerrar el programa (solo desde esta PC): lo usa el acceso directo "Cerrar PanelCronometro"
+    if (req.method === 'POST' && url.pathname === '/api/salir') {
+      if (!/^(::ffff:)?127\.|^::1$/.test(req.socket.remoteAddress || '')) return json(res, 403, { error: 'Solo desde esta PC' });
+      json(res, 200, { ok: true }); go2rtc.stop(); setTimeout(() => process.exit(0), 300); return;
+    }
     const route = ROUTES[`${req.method} ${url.pathname}`];
     if (route) {
       const d = req.method === 'POST' ? JSON.parse((await body(req)) || '{}') : {};
@@ -326,7 +351,7 @@ export const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/')) return json(res, 404, { error: 'Ruta desconocida' });
     if (url.pathname.startsWith('/media/videos/')) return serveVideo(req, res, decodeURIComponent(url.pathname.slice(14)));
     if (url.pathname.startsWith('/media/')) return serveFile(res, logosDir, decodeURIComponent(url.pathname.slice(7)));
-    return serveFile(res, path.join(root, 'public'), decodeURIComponent(url.pathname === '/' ? 'index.html' : url.pathname.slice(1)));
+    return servePublic(res, decodeURIComponent(url.pathname === '/' ? 'index.html' : url.pathname.slice(1)));
   } catch (e) { json(res, 400, { error: e.message }); }
 });
 server.on('upgrade', (req, socket, head) => {
@@ -335,7 +360,7 @@ server.on('upgrade', (req, socket, head) => {
   else socket.destroy();
 });
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.env.PC_START || (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))) {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`PanelCronometro ${VERSION}\nPanel: http://127.0.0.1:${PORT}/\n${lanUrls().map(u => 'Desde el celular: ' + u).join('\n')}\nPantalla: http://127.0.0.1:${PORT}/pantalla.html`);
   });
