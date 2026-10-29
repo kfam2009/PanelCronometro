@@ -8,12 +8,14 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:"Segoe UI",Inte
 .brand-l{height:58px}.brand-r{height:50px}
 .title{text-align:center;display:flex;flex-direction:column;line-height:1.35}.title b{font-size:15px;letter-spacing:3px}.title span{font-size:11px;color:var(--muted)}
 /* Todo en una pantalla: grilla que ocupa el alto disponible, las listas se desplazan por dentro */
-main{flex:1;min-height:0;display:grid;gap:10px;padding:10px;
-  grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
-  grid-template-rows:auto auto minmax(0,1fr) minmax(0,1fr);
-  grid-template-areas:"crono lleg" "pant lleg" "cams medios" "logos medios"}
-.a-medios{grid-area:medios}
-.a-crono{grid-area:crono}.a-pant{grid-area:pant}.a-cams{grid-area:cams}.a-lleg{grid-area:lleg}.a-logos{grid-area:logos}
+main{flex:1;min-height:0;overflow:auto;display:grid;gap:10px;padding:10px;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+/* dos columnas: a la izquierda cronometraje, pantalla y camaras; a la derecha llegadas, video/YouTube y logos.
+   Lo que crece (camaras y llegadas) ocupa el lugar que sobra y se desplaza por dentro */
+.col{min-height:0;display:flex;flex-direction:column;gap:10px}
+.col>.card{flex:none}
+.col>.a-cams,.col>.a-lleg{flex:1 1 0;min-height:170px}
+#medios{max-height:132px}
+.a-logos .logos{max-height:96px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:0;display:flex;flex-direction:column;gap:8px}
 .head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 h2{margin:0;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:var(--y)}
@@ -57,6 +59,8 @@ input[type=color]{padding:2px;height:33px;width:56px}
 @media(max-width:820px){
   body{display:block}
   main{display:flex;flex-direction:column}
+  .col{display:contents}
+  #medios,.a-logos .logos{max-height:none}
   .brand-l{height:40px}.brand-r{height:34px}.title b{font-size:12px;letter-spacing:1px}.title #urls{display:none}
   .scroll{max-height:none;overflow:visible}
   .prev{max-height:none}
