@@ -31,6 +31,8 @@ test('Config de go2rtc: solo cámaras IP, nombres seguros', () => {
   assert.deepEqual(c.streams, { cam_ab12: 'rtsp://x/1', cam_ef56: 'ffmpeg:rtsp://y/2#video=copy' }); assert.equal(c.ffmpeg.bin, 'C:/ff/ffmpeg.exe');
   assert.equal(c.api.listen, '127.0.0.1:1999'); assert.equal(c.api.origin, '*'); assert.match(c.rtsp.listen, /^127\.0\.0\.1:\d+$/);
   assert.equal(streamName('a/b..c'), 'cam_abc');
+  const srt = go2rtcConfig([{ id: 'zz99', tipo: 'ip', url: 'srt://br-1.castr.io:9999?streamid=#!::r=live_x,m=request' }], 1999, 'ff.exe');
+  assert.equal(srt.streams.cam_zz99, 'ffmpeg:srt://br-1.castr.io:9999?streamid=%23!::r=live_x,m=request#video=copy');
 });
 
 test('Circuito completo con un RaceResult de prueba: link, en vivo, simular, cargar todos, tablas y guardado', async () => {

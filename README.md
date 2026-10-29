@@ -21,8 +21,11 @@ Todo se maneja desde un **panel** que se abre en la PC o en el **celular** (mism
 3. Para las cámaras IP hace falta `tools\go2rtc.exe`. Si en la PC está el panel de domos
    (`Videos\panelgo-ptz`), `Iniciar.cmd` lo copia solo. Si no, bajarlo de
    https://github.com/AlexxIT/go2rtc/releases (`go2rtc_win64.zip`) y ponerlo en `tools\`.
-4. Doble clic en **Iniciar.cmd**: arranca el programa y abre el panel.
-5. Para entrar desde el celular, ejecutar una vez **PermitirCelular.cmd** (pide permisos).
+4. Para **SRT** y el **modo compatible** hace falta `tools\ffmpeg.exe` con soporte SRT: bajar
+   `ffmpeg-master-latest-win64-gpl.zip` de https://github.com/BtbN/FFmpeg-Builds/releases y copiar
+   `bin\ffmpeg.exe` a `tools\`. (El ffmpeg del panel de domos sirve para RTSP, pero no trae SRT.)
+5. Doble clic en **Iniciar.cmd**: arranca el programa y abre el panel.
+6. Para entrar desde el celular, ejecutar una vez **PermitirCelular.cmd** (pide permisos).
 
 ## Uso
 
@@ -45,7 +48,8 @@ no llegaron, así no se pierde ninguna llegada.
 
 - `server.mjs`: servidor (Node 20+, sin dependencias). Puerto 5100 (`PORT` para cambiarlo).
 - `lib/carrera.mjs`: conexión con RaceResult (websocket del presenter + chipcheck), tablas y guardado.
-- `lib/camaras.mjs`: go2rtc solo en 127.0.0.1; la pantalla lo usa a través de `/go2rtc/` (mismo origen).
+- `lib/camaras.mjs`: go2rtc solo en 127.0.0.1; la pantalla lo usa a través de `/go2rtc/` (mismo origen), por WebRTC.
+  Modo compatible (y siempre en SRT): ffmpeg lee la cámara y se la pasa a go2rtc sin recodificar.
 - `public/pantalla.html`: diseño 1920×640 (3:1) que se escala al área elegida.
 - `data/` (no se sube a GitHub): configuración, llegadas guardadas, logos subidos.
 - Tests: `npm test` (incluye un RaceResult de prueba con websocket).
