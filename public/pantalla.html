@@ -11,7 +11,7 @@
   #stage{position:absolute;left:0;top:0;width:1920px;height:640px;transform-origin:0 0;display:flex}
   #cam{flex:none;width:853px;height:640px;position:relative;display:none;background:#05070b;overflow:hidden}
   .cam #cam{display:block}
-  #cam video,#cam video-stream{position:absolute;inset:0;z-index:1;background:#05070b;width:100%!important;height:100%!important;object-fit:cover!important;display:block}
+  #cam video,#cam video-stream,#cam camara-llegada{position:absolute;inset:0;z-index:1;background:#05070b;width:100%!important;height:100%!important;object-fit:cover!important;display:block}
   #cam .tag{position:absolute;left:18px;top:18px;z-index:2;background:#e3192c;color:#fff;font-weight:900;font-size:34px;letter-spacing:2px;padding:6px 18px;border-radius:6px;display:flex;align-items:center;gap:12px}
   #cam .tag::before{content:"";width:18px;height:18px;border-radius:50%;background:#fff;animation:bl 1s infinite}
   #cam .nosig{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#59606d;font-size:40px;font-weight:800;letter-spacing:2px}
@@ -109,20 +109,27 @@ let camStream = null;
 async function setCamera(c) {
   const key = c ? `${c.tipo}:${c.id}:${c.usb}` : '';
   if (key === camKey) return; camKey = key;
-  const box = $('#cam'); box.querySelectorAll('video,video-stream').forEach(e => e.remove());
+  const box = $('#cam'); box.querySelectorAll('video,video-stream,camara-llegada').forEach(e => e.remove());
   camStream?.getTracks().forEach(t => t.stop()); camStream = null;
   if (!c) return;
   try {
     if (c.tipo === 'ip') {
-      if (!customElements.get('video-stream')) await import('/go2rtc/video-stream.js');
-      const v = document.createElement('video-stream');
-      // solo video: el audio de algunas camaras (ej. Foscam) llega desfasado y congela la imagen
-      v.mode = 'mse,mjpeg'; v.media = 'video'; v.background = true;
-      v.src = new URL(`/go2rtc/api/ws?src=cam_${encodeURIComponent(c.id)}&media=video`, location.href.replace(/^http/, 'ws'));
+      // Igual que el panel de domos: WebRTC (casi sin demora y tolera los tiempos raros de algunas camaras),
+      // solo video, sin colchon de espera; si WebRTC no conecta, cae a MSE.
+      if (!customElements.get('camara-llegada')) {
+        const { VideoRTC } = await import('/go2rtc/video-rtc.js');
+        customElements.define('camara-llegada', class extends VideoRTC {
+          constructor() { super(); this.mode = 'webrtc,mse'; this.media = 'video'; this.background = true; this.visibilityCheck = false; this.pcConfig = { bundlePolicy: 'max-bundle', iceServers: [] }; }
+          oninit() { super.oninit(); this.video.controls = false; this.video.muted = true; this.video.style.objectFit = 'cover'; }
+          onwebrtc() {
+            super.onwebrtc();
+            this.pc.addEventListener('track', e => { try { e.receiver.jitterBufferTarget = 0; } catch {} try { e.receiver.playoutDelayHint = 0; } catch {} });
+          }
+        });
+      }
+      const v = document.createElement('camara-llegada');
+      v.src = new URL(`/go2rtc/api/ws?src=cam_${encodeURIComponent(c.id)}`, location.href.replace(/^http/, 'ws'));
       box.prepend(v);
-      // sin controles ni sonido, llenando el recuadro
-      const fix = () => { const vid = v.querySelector('video'); if (vid) { vid.controls = false; vid.muted = true; vid.style.objectFit = 'cover'; } };
-      fix(); setTimeout(fix, 300); setTimeout(fix, 1500);
     } else {
       // USB: se busca el dispositivo por nombre (hace falta un primer permiso para ver los nombres)
       const tmp = await navigator.mediaDevices.getUserMedia({ video: true }); tmp.getTracks().forEach(t => t.stop());

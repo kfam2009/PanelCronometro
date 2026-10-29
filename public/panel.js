@@ -87,8 +87,15 @@ function drawCams(list, actual) {
       src.replaceChildren(new Option(opts.length ? 'Elegí el dispositivo' : 'Tocá acá para buscar dispositivos', ''), ...opts.map(o => new Option(o, o)));
       src.value = c.usb || ''; src.onfocus = loadUsb; src.onchange = () => edit(i, { usb: src.value });
     } else { src = el('input'); src.value = c.url; src.placeholder = 'rtsp://usuario:clave@IP:554/...'; src.oninput = () => edit(i, { url: src.value }); }
+    // Modo compatible (ffmpeg): para camaras que en la pantalla se ven a los saltos
+    let comp = null;
+    if (c.tipo === 'ip') {
+      comp = el('label', 'chk'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = Boolean(c.compat);
+      cb.onchange = () => { edit(i, { compat: cb.checked }); }; comp.title = 'Si la imagen se ve a los saltos o congelada (algunas Foscam). Necesita ffmpeg.';
+      comp.append(cb, document.createTextNode('compatible'));
+    }
     const del = el('button', 'btn del mini', 'QUITAR'); del.onclick = () => { camDraft = (camDraft || structuredClone(list)).filter((_, j) => j !== i); dirty(); };
-    row.append(name, tipo, src, del);
+    row.append(name, tipo, src, ...(comp ? [comp] : []), del);
     // Estado de la camara (solo las ya guardadas)
     const e = !camDraft && c.id && st.camEstado?.[c.id];
     if (e && c.tipo === 'ip' && (actual === c.id || e.estado !== 'probando')) {

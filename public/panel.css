@@ -36,7 +36,7 @@ input[type=color]{padding:2px;height:33px;width:56px}
 .prev{position:relative;width:min(100%,90vh);aspect-ratio:3/1;align-self:center;overflow:hidden;background:#000;border:1px solid var(--line);border-radius:6px}
 .prev iframe{position:absolute;left:0;top:0;width:1920px;height:640px;border:0;transform-origin:0 0;pointer-events:none}
 .cams{display:flex;flex-direction:column;gap:6px}
-.cam{display:grid;grid-template-columns:120px auto minmax(0,1fr) auto;gap:6px;align-items:center;padding:6px;background:#11141b;border:1px solid var(--line);border-radius:8px}
+.cam{display:grid;grid-template-columns:120px auto minmax(0,1fr) auto auto;gap:6px;align-items:center;padding:6px;background:#11141b;border:1px solid var(--line);border-radius:8px}
 .cam.on{border-color:var(--y)}
 .cam .st{grid-column:1/-1;font-size:11px}
 .cam .st.bad{color:#ff8a93}.cam .st.ok{color:var(--go2)}
@@ -62,3 +62,4 @@ input[type=color]{padding:2px;height:33px;width:56px}
   .cam{grid-template-columns:1fr auto auto}.cam>input:nth-child(3),.cam>select{grid-column:1/-1}
   .it{grid-template-columns:40px minmax(0,1fr) 72px}.it .m{display:none}
 }
+.chk{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer}.chk input{width:auto}

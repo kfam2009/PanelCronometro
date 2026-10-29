@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { Carrera } from './lib/carrera.mjs';
 import { Go2rtc } from './lib/camaras.mjs';
 
-export const VERSION = '1.1.1';
+export const VERSION = '1.2.0';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 5100);
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
@@ -110,11 +110,12 @@ async function setCamaras(list) {
     id: typeof c.id === 'string' && /^[a-z0-9]{4,16}$/i.test(c.id) ? c.id : crypto.randomBytes(4).toString('hex'),
     nombre: str(c.nombre, 40) || 'Cámara', tipo: c.tipo === 'usb' ? 'usb' : 'ip',
     url: c.tipo === 'usb' ? '' : str(c.url, 500), usb: c.tipo === 'usb' ? str(c.usb, 200) : '',
+    compat: c.tipo === 'ip' && Boolean(c.compat),
   })).filter(c => c.tipo === 'usb' || /^(rtsp|rtsps|srt|rtmp|http|https):\/\//i.test(c.url));
   if (config.camara && config.camara !== 'rotar' && !config.camaras.some(c => c.id === config.camara)) config.camara = '';
   // si cambio la direccion de una camara, se vuelve a probar
-  const prev = new Map(prevCams.map(c => [c.id, c.url]));
-  for (const c of config.camaras) if (prev.get(c.id) !== c.url) camEstado.delete(c.id);
+  const prev = new Map(prevCams.map(c => [c.id, c.url + (c.compat ? '#c' : '')]));
+  for (const c of config.camaras) if (prev.get(c.id) !== c.url + (c.compat ? '#c' : '')) camEstado.delete(c.id);
   for (const id of camEstado.keys()) if (!config.camaras.some(c => c.id === id)) camEstado.delete(id);
   await save();
   go2rtc.apply(config.camaras);
