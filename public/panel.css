@@ -72,3 +72,4 @@ input[type=color]{padding:2px;height:33px;width:56px}
 .med .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}
 .pill.live{background:#e3192c;color:#fff}
 .chk{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer}.chk input{width:auto}
+#monitor{max-width:300px}

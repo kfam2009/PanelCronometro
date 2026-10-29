@@ -1,13 +1,15 @@
-# PanelCronometro - abre la pantalla a pantalla completa en el segundo monitor (el HDMI de la LED).
-# Si hay un solo monitor, la abre en ese. Para cerrarla: Alt+F4.
-param([int]$Port = 5100)
+# PanelCronometro - abre la pantalla a pantalla completa en la salida elegida en el panel (ej. el HDMI de la LED).
+# Sin eleccion (o si esa salida ya no esta): el monitor que no es el principal; si hay uno solo, ese. Para cerrarla: Alt+F4.
+param([int]$Port = 5100, [string]$Monitor = '')
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $profileDir = Join-Path $root 'data\perfil-pantalla'
 
 $screens = [System.Windows.Forms.Screen]::AllScreens
-$target = $screens | Where-Object { -not $_.Primary } | Select-Object -First 1
+$target = $null
+if ($Monitor) { $target = $screens | Where-Object { $_.DeviceName -eq $Monitor } | Select-Object -First 1 }
+if (-not $target) { $target = $screens | Where-Object { -not $_.Primary } | Select-Object -First 1 }
 if (-not $target) { $target = $screens | Select-Object -First 1 }
 $b = $target.Bounds
 

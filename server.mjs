@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { Carrera } from './lib/carrera.mjs';
 import { Go2rtc } from './lib/camaras.mjs';
 
-export const VERSION = '1.3.1';
+export const VERSION = '1.4.0';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 5100);
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
@@ -33,6 +33,7 @@ const DEFAULTS = {
   camaras: [], camara: '', rotarSeg: 20, color: '#ffd400',
   // Videos y YouTube a pantalla completa: medios = lista, alAire = { id, n } (n cambia cada vez que se manda, asi vuelve a empezar)
   medios: [], alAire: null, ajuste: 'llenar', sonido: true,
+  monitor: '', // salida de video donde se abre la pantalla ('' = la que no es la principal)
   logos: [
     { id: 'maxicronos', archivo: 'img/maxicronos.png', nombre: 'Maxi Cronos', activo: true, fijo: true },
     { id: 'panelgo', archivo: 'img/panelgo.png', nombre: 'Panel Go', activo: true, fijo: true },
@@ -114,6 +115,7 @@ async function setConfig(d) {
   if ('color' in d && /^#[0-9a-f]{6}$/i.test(d.color)) config.color = d.color;
   if ('ajuste' in d && ['llenar', 'entero'].includes(d.ajuste)) config.ajuste = d.ajuste;
   if ('sonido' in d) config.sonido = Boolean(d.sonido);
+  if ('monitor' in d) config.monitor = str(d.monitor, 60);
   await save();
 }
 async function setCamaras(list) {
@@ -227,10 +229,38 @@ async function serveVideo(req, res, rel) {
 }
 
 // Abre la pantalla a pantalla completa en el segundo monitor (Windows)
+// Salidas de video de esta PC (monitores / HDMI), leidas de Windows
+let monCache = { t: 0, list: [] };
+function monitores() {
+  if (process.platform !== 'win32') return Promise.resolve([]);
+  if (Date.now() - monCache.t < 5000) return Promise.resolve(monCache.list);
+  return new Promise(resolve => {
+    let out = '';
+    const p = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'scripts', 'Monitores.ps1')], { windowsHide: true });
+    const t = setTimeout(() => p.kill(), 10000);
+    p.stdout.on('data', d => out += d);
+    p.on('error', () => { clearTimeout(t); resolve(monCache.list); });
+    p.on('close', () => {
+      clearTimeout(t);
+      try {
+        const raw = JSON.parse(out.trim()); const arr = Array.isArray(raw) ? raw : [raw];
+        const pri = arr.find(m => m.principal) || arr[0];
+        const list = arr.map(m => {
+          const num = (/(\d+)$/.exec(m.id) || [])[1] || '?';
+          const lado = m.principal ? 'principal: tapa este panel' : m.x >= pri.x + pri.w ? 'a la derecha' : m.x + m.w <= pri.x ? 'a la izquierda' : m.y >= pri.y + pri.h ? 'abajo' : m.y + m.h <= pri.y ? 'arriba' : 'duplicada';
+          return { id: m.id, nombre: `Pantalla ${num} · ${m.w}×${m.h} · ${lado}`, principal: Boolean(m.principal) };
+        });
+        monCache = { t: Date.now(), list };
+      } catch {}
+      resolve(monCache.list);
+    });
+  });
+}
+
 function abrirPantalla() {
   if (process.platform !== 'win32') throw Error('Abrir la pantalla automáticamente funciona en Windows');
   const ps = path.join(root, 'scripts', 'AbrirPantalla.ps1');
-  spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ps, '-Port', String(PORT)], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ps, '-Port', String(PORT), ...(config.monitor ? ['-Monitor', config.monitor] : [])], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
 }
 
 // ---- HTTP ----
@@ -272,6 +302,7 @@ export const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/go2rtc/')) return go2rtc.proxy(req, res, url.pathname.slice(7) + url.search);
     if (req.method === 'GET' && url.pathname === '/api/estado') return json(res, 200, estado());
     if (req.method === 'GET' && url.pathname === '/api/pantalla') return json(res, 200, pantalla());
+    if (req.method === 'GET' && url.pathname === '/api/monitores') return json(res, 200, { monitores: await monitores(), monitor: config.monitor });
     if (req.method === 'POST' && url.pathname === '/api/medios/subir') {
       try { await subirVideo(req, url); } catch (e) { return json(res, 400, { error: e.message }); }
       return json(res, 200, estado());

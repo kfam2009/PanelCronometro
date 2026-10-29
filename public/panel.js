@@ -155,7 +155,26 @@ addEventListener('resize', fitPreview);
 
 $('#saveLink').onclick = () => act('link', { link: $('#link').value }, 'Link guardado, conectando...');
 $('#link').onkeydown = e => { if (e.key === 'Enter') $('#saveLink').click(); };
-$('#open').onclick = () => act('abrir-pantalla', {}, 'Abriendo la pantalla en el segundo monitor');
+$('#open').onclick = () => act('abrir-pantalla', {}, 'Abriendo la pantalla en ' + ($('#monitor').selectedOptions[0]?.textContent || 'la segunda salida'));
+// Salidas de video de la PC: se leen al abrir el panel y cada vez que se despliega la lista
+async function loadMonitores() {
+  try {
+    const r = await fetch('/api/monitores', { cache: 'no-store' }).then(r => r.json());
+    // solo se rearma si cambio algo (si se rearma con la lista abierta, se cierra)
+    const sig = JSON.stringify(r); if (sig === loadMonitores.sig) return; loadMonitores.sig = sig;
+    const sel = $('#monitor'), known = r.monitores.some(m => m.id === r.monitor);
+    sel.replaceChildren(new Option('Salida: automática (la que no es la principal)', ''), ...r.monitores.map(m => new Option(m.nombre, m.id)),
+      ...(r.monitor && !known ? [new Option('Salida guardada (no conectada ahora)', r.monitor)] : []));
+    sel.value = r.monitor || '';
+  } catch {}
+}
+$('#monitor').onfocus = () => loadMonitores();
+$('#monitor').onchange = async () => {
+  // al elegir una salida se guarda y la pantalla se abre ahi directamente
+  await act('config', { monitor: $('#monitor').value });
+  act('abrir-pantalla', {}, 'Abriendo la pantalla en ' + $('#monitor').selectedOptions[0].textContent);
+};
+loadMonitores();
 $('#area').onchange = () => act('config', { area: $('#area').value });
 $('#applyCustom').onclick = () => act('config', { area: 'custom', custom: Object.fromEntries(['x', 'y', 'w', 'h'].map(k => [k, Number($('#c' + k).value)])) }, 'Área aplicada');
 $('#seg').onchange = () => act('config', { segundos: Number($('#seg').value) });

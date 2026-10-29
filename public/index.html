@@ -23,10 +23,10 @@
   </section>
 
   <section class="card a-pant">
-    <div class="head"><h2>Pantalla</h2><button id="open" class="btn go" title="La abre a pantalla completa en el segundo monitor (el HDMI de la LED). Para cerrarla: Alt+F4">ABRIR EN LA PANTALLA</button></div>
+    <div class="head"><h2>Pantalla</h2><div class="row"><select id="monitor" title="Salida de video de esta PC donde se abre la pantalla (ej. el HDMI de la LED)"><option value="">Salida: automática</option></select><button id="open" class="btn go" title="La abre a pantalla completa en la salida elegida. Para cerrarla: Alt+F4">ABRIR EN LA PANTALLA</button></div></div>
     <div class="prev"><iframe id="preview" src="pantalla.html?preview=1" allow="autoplay; encrypted-media" title="Vista de la pantalla" tabindex="-1"></iframe></div>
     <div class="opts">
-      <label class="grow">Salida HDMI<select id="area"></select></label>
+      <label class="grow">Lugar dentro de la salida<select id="area"></select></label>
       <label>Página (seg)<input id="seg" type="number" min="3" max="30"></label>
       <label>Color<input id="color" type="color"></label>
     </div>
