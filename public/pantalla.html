@@ -116,8 +116,9 @@ async function setCamera(c) {
     if (c.tipo === 'ip') {
       if (!customElements.get('video-stream')) await import('/go2rtc/video-stream.js');
       const v = document.createElement('video-stream');
-      v.mode = 'mse,mjpeg'; v.background = true;
-      v.src = new URL(`/go2rtc/api/ws?src=cam_${encodeURIComponent(c.id)}`, location.href.replace(/^http/, 'ws'));
+      // solo video: el audio de algunas camaras (ej. Foscam) llega desfasado y congela la imagen
+      v.mode = 'mse,mjpeg'; v.media = 'video'; v.background = true;
+      v.src = new URL(`/go2rtc/api/ws?src=cam_${encodeURIComponent(c.id)}&media=video`, location.href.replace(/^http/, 'ws'));
       box.prepend(v);
       // sin controles ni sonido, llenando el recuadro
       const fix = () => { const vid = v.querySelector('video'); if (vid) { vid.controls = false; vid.muted = true; vid.style.objectFit = 'cover'; } };

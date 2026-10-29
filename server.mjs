@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { Carrera } from './lib/carrera.mjs';
 import { Go2rtc } from './lib/camaras.mjs';
 
-export const VERSION = '1.1.0';
+export const VERSION = '1.1.1';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 5100);
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
