@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { Carrera } from './lib/carrera.mjs';
 import { Go2rtc } from './lib/camaras.mjs';
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.2.1';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 5100);
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
@@ -45,7 +45,7 @@ const save = () => (saving = saving.then(async () => {
 }).catch(() => {}));
 
 const carrera = new Carrera({ dataDir, getConfig: () => config, save });
-const go2rtc = new Go2rtc({ root });
+const go2rtc = new Go2rtc({ root, logFile: path.join(dataDir, 'go2rtc.log') });
 carrera.ready.then(() => { if (config.link) carrera.connect(); });
 go2rtc.apply(config.camaras);
 
