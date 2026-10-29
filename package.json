@@ -1,6 +1,6 @@
 {
   "name": "panelcronometro",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Pantalla de llegadas 3x1 para carreras (RaceResult) con cámaras, sin vMix ni OBS. Panel Go para Maxi Cronos.",
   "type": "module",
   "private": true,

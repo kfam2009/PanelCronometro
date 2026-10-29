@@ -29,7 +29,7 @@ test('Registro de RaceResult -> llegada', () => {
 test('Config de go2rtc: solo cámaras IP, nombres seguros', () => {
   const c = go2rtcConfig([{ id: 'ab12', tipo: 'ip', url: ' rtsp://x/1 ' }, { id: 'cd34', tipo: 'usb', usb: 'Cam' }, { id: 'ef56', tipo: 'ip', url: 'rtsp://y/2', compat: true }], 1999, 'C:/ff/ffmpeg.exe');
   assert.deepEqual(c.streams, { cam_ab12: 'rtsp://x/1', cam_ef56: 'ffmpeg:rtsp://y/2#video=copy' }); assert.equal(c.ffmpeg.bin, 'C:/ff/ffmpeg.exe');
-  assert.equal(c.api.listen, '127.0.0.1:1999'); assert.equal(c.api.origin, '*');
+  assert.equal(c.api.listen, '127.0.0.1:1999'); assert.equal(c.api.origin, '*'); assert.match(c.rtsp.listen, /^127\.0\.0\.1:\d+$/);
   assert.equal(streamName('a/b..c'), 'cam_abc');
 });
 
