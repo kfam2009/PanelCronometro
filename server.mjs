@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { Carrera } from './lib/carrera.mjs';
 import { Go2rtc } from './lib/camaras.mjs';
 
-export const VERSION = '1.4.0';
+export const VERSION = '1.4.1';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 5100);
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
@@ -259,8 +259,18 @@ function monitores() {
 
 function abrirPantalla() {
   if (process.platform !== 'win32') throw Error('Abrir la pantalla automáticamente funciona en Windows');
-  const ps = path.join(root, 'scripts', 'AbrirPantalla.ps1');
-  spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ps, '-Port', String(PORT), ...(config.monitor ? ['-Monitor', config.monitor] : [])], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  const ps = path.join(root, 'scripts', 'AbrirPantalla.ps1'), logFile = path.join(dataDir, 'abrir-pantalla.log');
+  // lo que diga PowerShell (errores incluidos) queda en data/abrir-pantalla.log; si falla, se avisa en el panel
+  return new Promise((ok, bad) => {
+    let out = '';
+    const p = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps, '-Port', String(PORT), ...(config.monitor ? ['-Monitor', config.monitor] : [])], { windowsHide: true });
+    p.stdout.on('data', d => out += d); p.stderr.on('data', d => out += d);
+    p.on('error', e => bad(Error('No se pudo ejecutar PowerShell: ' + e.message)));
+    p.on('close', code => {
+      if (out.trim()) fs.appendFile(logFile, `${new Date().toISOString()} salida de PowerShell (codigo ${code}):\n${out}\n`).catch(() => {});
+      code === 0 ? ok() : bad(Error('No se pudo abrir la pantalla: ' + (out.trim().split('\n').find(l => l.trim()) || 'código ' + code)));
+    });
+  });
 }
 
 // ---- HTTP ----
