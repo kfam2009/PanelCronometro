@@ -27,6 +27,17 @@ try {
     else { Write-Host 'Aviso: falta tools\go2rtc.exe. Sin el, las camaras IP no se ven (USB si).' -ForegroundColor Yellow }
   }
 
+  # 2b) ffmpeg con SRT: si vino partido (tools\ffmpeg.part0, part1...), se arma tools\ffmpeg.exe
+  $parts = Get-ChildItem (Join-Path $root 'tools') -Filter 'ffmpeg.part*' -ErrorAction SilentlyContinue | Sort-Object { [int]($_.Name -replace '\D', '') }
+  if ($parts) {
+    $ff = Join-Path $root 'tools\ffmpeg.exe'
+    Get-Process ffmpeg -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $ff } | Stop-Process -Force -ErrorAction SilentlyContinue
+    $out = [System.IO.File]::Create($ff)
+    try { foreach ($p in $parts) { $in = [System.IO.File]::OpenRead($p.FullName); try { $in.CopyTo($out) } finally { $in.Close() } } } finally { $out.Close() }
+    $parts | Remove-Item -Force
+    Write-Host 'ffmpeg (con SRT) instalado en tools.'
+  }
+
   # 3) Si ya corre la misma version, no se toca; si es otra, se reinicia
   $running = $null
   try { $running = Invoke-RestMethod "http://127.0.0.1:$port/api/estado" -TimeoutSec 2 } catch {}
