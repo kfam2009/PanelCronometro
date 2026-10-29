@@ -119,7 +119,9 @@ async function setCamera(c) {
       v.mode = 'mse,mjpeg'; v.background = true;
       v.src = new URL(`/go2rtc/api/ws?src=cam_${encodeURIComponent(c.id)}`, location.href.replace(/^http/, 'ws'));
       box.prepend(v);
-      setTimeout(() => { const vid = v.querySelector('video'); if (vid) { vid.muted = true; vid.style.objectFit = 'cover'; } }, 500);
+      // sin controles ni sonido, llenando el recuadro
+      const fix = () => { const vid = v.querySelector('video'); if (vid) { vid.controls = false; vid.muted = true; vid.style.objectFit = 'cover'; } };
+      fix(); setTimeout(fix, 300); setTimeout(fix, 1500);
     } else {
       // USB: se busca el dispositivo por nombre (hace falta un primer permiso para ver los nombres)
       const tmp = await navigator.mediaDevices.getUserMedia({ video: true }); tmp.getTracks().forEach(t => t.stop());
