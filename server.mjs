@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { Carrera } from './lib/carrera.mjs';
 import { Go2rtc } from './lib/camaras.mjs';
 
-export const VERSION = '1.3.0';
+export const VERSION = '1.3.1';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 5100);
 const dataDir = process.env.DATA_DIR || path.join(root, 'data');
@@ -68,8 +68,10 @@ async function vigilarCamara() {
 setInterval(() => vigilarCamara().catch(() => {}), 2000).unref();
 
 // Camara que se ve ahora en la pantalla (fija o rotando)
+// Fuentes para el lugar de la camara: las camaras y tambien los videos y YouTube (id 'm:<id>')
+const fuentes = () => [...config.camaras, ...config.medios.map(m => ({ ...m, id: 'm:' + m.id, medio: true }))];
 function camaraActual() {
-  const cams = config.camaras;
+  const cams = fuentes();
   if (!cams.length || !config.camara) return null;
   if (config.camara === 'rotar') return cams[Math.floor(Date.now() / (Math.max(5, config.rotarSeg) * 1000)) % cams.length];
   return cams.find(c => c.id === config.camara) || null;
@@ -90,7 +92,7 @@ function pantalla() {
   if (cam && cam.tipo === 'ip' && camEstado.get(cam.id)?.estado !== 'ok') cam = null;
   return {
     ...carrera.screenData(), segundos: config.segundos, area: config.area, custom: config.custom, color: config.color,
-    camara: cam ? { id: cam.id, tipo: cam.tipo, nombre: cam.nombre, usb: cam.usb || '' } : null,
+    camara: cam ? { id: cam.id, tipo: cam.tipo, nombre: cam.nombre, usb: cam.usb || '', src: cam.archivo || '', yt: cam.yt || '' } : null,
     logos: config.logos.filter(l => l.activo).map(l => l.archivo),
     medio: medioAlAire(), ajuste: config.ajuste, sonido: config.sonido,
   };
@@ -107,7 +109,7 @@ async function setConfig(d) {
   if ('segundos' in d) config.segundos = Math.min(30, Math.max(3, Number(d.segundos) || 8));
   if ('area' in d && d.area in AREAS) config.area = d.area;
   if (d.custom) for (const k of ['x', 'y', 'w', 'h']) if (Number.isFinite(Number(d.custom[k]))) config.custom[k] = Math.max(0, Math.round(Number(d.custom[k])));
-  if ('camara' in d) config.camara = d.camara === 'rotar' || config.camaras.some(c => c.id === d.camara) ? d.camara : '';
+  if ('camara' in d) config.camara = d.camara === 'rotar' || fuentes().some(c => c.id === d.camara) ? d.camara : '';
   if ('rotarSeg' in d) config.rotarSeg = Math.min(600, Math.max(5, Number(d.rotarSeg) || 20));
   if ('color' in d && /^#[0-9a-f]{6}$/i.test(d.color)) config.color = d.color;
   if ('ajuste' in d && ['llenar', 'entero'].includes(d.ajuste)) config.ajuste = d.ajuste;
@@ -123,7 +125,7 @@ async function setCamaras(list) {
     url: c.tipo === 'usb' ? '' : str(c.url, 500), usb: c.tipo === 'usb' ? str(c.usb, 200) : '',
     compat: c.tipo === 'ip' && (Boolean(c.compat) || /^srt:/i.test(String(c.url || '').trim())),
   })).filter(c => c.tipo === 'usb' || /^(rtsp|rtsps|srt|rtmp|http|https):\/\//i.test(c.url));
-  if (config.camara && config.camara !== 'rotar' && !config.camaras.some(c => c.id === config.camara)) config.camara = '';
+  if (config.camara && config.camara !== 'rotar' && !fuentes().some(c => c.id === config.camara)) config.camara = '';
   // si cambio la direccion de una camara, se vuelve a probar
   const prev = new Map(prevCams.map(c => [c.id, c.url + (c.compat ? '#c' : '')]));
   for (const c of config.camaras) if (prev.get(c.id) !== c.url + (c.compat ? '#c' : '')) camEstado.delete(c.id);
@@ -194,6 +196,7 @@ async function setMedios(list) {
   for (const m of byId.values()) if (m.archivo) await fs.unlink(path.join(videosDir, path.basename(m.archivo))).catch(() => {});
   config.medios = next;
   if (config.alAire && !next.some(m => m.id === config.alAire.id)) config.alAire = null;
+  if (config.camara && config.camara !== 'rotar' && !fuentes().some(c => c.id === config.camara)) config.camara = '';
   await save();
 }
 async function alAire(id) {

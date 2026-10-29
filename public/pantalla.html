@@ -11,6 +11,8 @@
   #stage{position:absolute;left:0;top:0;width:1920px;height:640px;transform-origin:0 0;display:flex}
   #cam{flex:none;width:853px;height:640px;position:relative;display:none;background:#05070b;overflow:hidden}
   .cam #cam{display:block}
+  #cam iframe{position:absolute;z-index:1;border:0;pointer-events:none}
+  #cam.grabado .tag{display:none}
   #cam video,#cam video-stream,#cam camara-llegada{position:absolute;inset:0;z-index:1;background:#05070b;width:100%!important;height:100%!important;object-fit:cover!important;display:block}
   #cam .tag{position:absolute;left:18px;top:18px;z-index:2;background:#e3192c;color:#fff;font-weight:900;font-size:34px;letter-spacing:2px;padding:6px 18px;border-radius:6px;display:flex;align-items:center;gap:12px}
   #cam .tag::before{content:"";width:18px;height:18px;border-radius:50%;background:#fff;animation:bl 1s infinite}
@@ -83,7 +85,7 @@
 <script>
 const $ = s => document.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms));
 const demo = new URLSearchParams(location.search).get('demo');
-const preview = new URLSearchParams(location.search).has('preview'); // la vista chica del panel: sin sonido
+var preview = new URLSearchParams(location.search).has('preview'); // la vista chica del panel: sin sonido
 const ROWS = 7, LOGO_EVERY = 3;
 let st = null, lastSeq = null, queue = [], showing = false, rotK = 0, logoK = 0, rotTimer = null, newest = null, camKey = '';
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -111,6 +113,14 @@ function layout() {
 }
 
 // ---- Video subido o YouTube a pantalla completa ----
+const ytUrl = (id, mute) => `https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&mute=${mute ? 1 : 0}&controls=0&rel=0&playsinline=1&iv_load_policy=3&disablekb=1&modestbranding=1&loop=1&playlist=${encodeURIComponent(id)}`;
+// YouTube es 16:9: "llenar" lo agranda hasta cubrir el lugar (recorta); "entero" lo muestra completo con bordes
+function ajustarYt(f, W, H) {
+  if (!f) return; let w, h;
+  if (st.ajuste === 'entero') { h = H; w = H * 16 / 9; if (w > W) { w = W; h = W * 9 / 16; } }
+  else { w = W; h = W * 9 / 16; if (h < H) { h = H; w = H * 16 / 9; } }
+  Object.assign(f.style, { width: w + 'px', height: h + 'px', left: (W - w) / 2 + 'px', top: (H - h) / 2 + 'px' });
+}
 let medKey = '';
 function setMedio() {
   const m = st.medio, full = $('#full');
@@ -128,34 +138,36 @@ function setMedio() {
     } else if (m) {
       const f = document.createElement('iframe');
       f.allow = 'autoplay; encrypted-media'; f.referrerPolicy = 'strict-origin-when-cross-origin';
-      f.src = `https://www.youtube.com/embed/${encodeURIComponent(m.yt)}?autoplay=1&mute=${preview || !st.sonido ? 1 : 0}&controls=0&rel=0&playsinline=1&iv_load_policy=3&disablekb=1&modestbranding=1&loop=1&playlist=${encodeURIComponent(m.yt)}`;
+      f.src = ytUrl(m.yt, preview || !st.sonido);
       full.append(f);
     }
   }
   if (!m) return;
   const v = full.querySelector('video');
   if (v) { v.style.objectFit = st.ajuste === 'entero' ? 'contain' : 'cover'; v.loop = m.repetir; }
-  const f = full.querySelector('iframe');
-  if (f) {
-    // YouTube es 16:9: "llenar" lo agranda hasta cubrir la LED (recorta arriba/abajo); "entero" lo muestra completo con bordes
-    const W = full.clientWidth, H = full.clientHeight; let w, h;
-    if (st.ajuste === 'entero') { h = H; w = H * 16 / 9; if (w > W) { w = W; h = W * 9 / 16; } }
-    else { w = W; h = W * 9 / 16; if (h < H) { h = H; w = H * 16 / 9; } }
-    Object.assign(f.style, { width: w + 'px', height: h + 'px', left: (W - w) / 2 + 'px', top: (H - h) / 2 + 'px' });
-  }
+  ajustarYt(full.querySelector('iframe'), full.clientWidth, full.clientHeight);
 }
 addEventListener('resize', () => st && layout());
 
 // ---- Camara: IP por go2rtc (mismo origen /go2rtc) o USB/capturadora directo ----
 let camStream = null;
 async function setCamera(c) {
-  const key = c ? `${c.tipo}:${c.id}:${c.usb}` : '';
-  if (key === camKey) return; camKey = key;
-  const box = $('#cam'); box.querySelectorAll('video,video-stream,camara-llegada').forEach(e => e.remove());
+  const key = c ? `${c.tipo}:${c.id}:${c.usb}:${c.tipo === 'ip' || c.tipo === 'usb' ? '' : st.sonido}` : '';
+  if (key === camKey) { if (c?.tipo === 'youtube') ajustarYt($('#cam iframe'), 853, 640); return; }
+  camKey = key;
+  const box = $('#cam'); box.querySelectorAll('video,video-stream,camara-llegada,iframe').forEach(e => e.remove());
+  box.classList.toggle('grabado', c?.tipo === 'video');
   camStream?.getTracks().forEach(t => t.stop()); camStream = null;
   if (!c) return;
   try {
-    if (c.tipo === 'ip') {
+    if (c.tipo === 'video') {
+      // video subido en el lugar de la camara: se repite
+      const v = document.createElement('video'); v.src = c.src; v.autoplay = true; v.loop = true; v.playsInline = true; v.muted = preview || !st.sonido;
+      box.prepend(v); v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+    } else if (c.tipo === 'youtube') {
+      const f = document.createElement('iframe'); f.allow = 'autoplay; encrypted-media'; f.referrerPolicy = 'strict-origin-when-cross-origin';
+      f.src = ytUrl(c.yt, preview || !st.sonido); box.prepend(f); ajustarYt(f, 853, 640);
+    } else if (c.tipo === 'ip') {
       // Igual que el panel de domos: WebRTC (casi sin demora y tolera los tiempos raros de algunas camaras),
       // solo video, sin colchon de espera; si WebRTC no conecta, cae a MSE.
       if (!customElements.get('camara-llegada')) {

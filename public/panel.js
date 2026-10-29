@@ -43,8 +43,11 @@ function render() {
   $('#g2r').textContent = g.error ? 'CÁMARAS IP: ' + (g.instalado ? 'ERROR' : 'FALTA go2rtc') : g.corriendo ? 'CÁMARAS IP LISTAS' : 'SIN CÁMARAS IP';
   $('#g2r').className = 'pill' + (g.error ? ' bad' : g.corriendo ? ' ok' : '');
   $('#g2r').title = g.error || '';
-  if (changed('camSel', [C.camaras.map(c => [c.id, c.nombre]), C.camara]) && !focused('#camSel')) {
-    $('#camSel').replaceChildren(new Option('Sin cámara (solo resultados)', ''), ...C.camaras.map(c => new Option(c.nombre, c.id)), ...(C.camaras.length > 1 ? [new Option('Rotar entre todas', 'rotar')] : []));
+  if (changed('camSel', [C.camaras.map(c => [c.id, c.nombre]), C.medios.map(m => [m.id, m.nombre]), C.camara]) && !focused('#camSel')) {
+    // en el lugar de la camara tambien puede ir un video subido o un YouTube
+    const n = C.camaras.length + C.medios.length;
+    $('#camSel').replaceChildren(new Option('Sin cámara (solo resultados)', ''), ...C.camaras.map(c => new Option(c.nombre, c.id)),
+      ...C.medios.map(m => new Option((m.tipo === 'youtube' ? 'YouTube: ' : 'Video: ') + m.nombre, 'm:' + m.id)), ...(n > 1 ? [new Option('Rotar entre todas', 'rotar')] : []));
     $('#camSel').value = C.camara || '';
   }
   $('#rotWrap').hidden = C.camara !== 'rotar';
@@ -84,7 +87,7 @@ function render() {
       x.onclick = () => { if (confirm(`¿Borrar "${m.nombre}"?`)) act('medios', { medios: C.medios.filter(y => y.id !== m.id) }, 'Borrado'); };
       r.append(tag, el('span', 'n', m.nombre), rep, go, x);
       return r;
-    }) : [el('p', 'muted', 'Subí un video o pegá un link de YouTube. AL AIRE lo muestra a pantalla completa; mientras tanto las llegadas esperan y salen después.')]));
+    }) : [el('p', 'muted', 'Subí un video o pegá un link de YouTube. Aparecen en Cámaras → "En la pantalla" para ir en lugar de una cámara; AL AIRE los muestra a pantalla completa.')]));
   }
   // Llegadas
   if (changed('list', st.recientes.map(a => [a.pid, a.t]))) {
