@@ -8,15 +8,12 @@ New-Item -ItemType Directory -Force -Path $data, (Join-Path $root 'tools') | Out
 $version = (Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version
 
 try {
-  # 1) Node.js (el del sistema o el que trae Codex)
+  # 1) Node.js: el que viene en la carpeta tools, o el del sistema si esta instalado
   $node = $null
-  $cmd = Get-Command node -ErrorAction SilentlyContinue
-  if ($cmd) { $node = $cmd.Source }
-  if (-not $node) {
-    $codex = Join-Path $env:USERPROFILE '.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe'
-    if (Test-Path $codex) { $node = $codex }
-  }
-  if (-not $node) { throw 'Falta Node.js. Instalarlo desde https://nodejs.org (version LTS) y volver a abrir Iniciar.cmd.' }
+  $propio = Join-Path $root 'tools\node.exe'
+  if (Test-Path $propio) { $node = $propio }
+  if (-not $node) { $cmd = Get-Command node -ErrorAction SilentlyContinue; if ($cmd) { $node = $cmd.Source } }
+  if (-not $node) { throw 'Falta Node.js (deberia venir en tools\node.exe). Si no esta, instalar Node LTS desde https://nodejs.org.' }
 
   # 2) go2rtc (para las camaras IP): si no esta, se copia del panel de domos
   $g2r = Join-Path $root 'tools\go2rtc.exe'
